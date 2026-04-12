@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cipher-base text-slate-100 antialiased selection:bg-cipher-primary/30;
+    margin: 0;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(circle at 50% 50%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 100% 100%, 40px 40px, 40px 40px;
+  }
+}
+
+.glass {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
+}
+
+.glass-glow-primary {
+  @apply border-cipher-primary/30 shadow-[0_0_15px_rgba(0,212,255,0.2)];
+}
+
+.glass-glow-secondary {
+  @apply border-cipher-secondary/30 shadow-[0_0_15px_rgba(123,47,255,0.2)];
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-cipher-primary to-cipher-secondary;
+}
+
+.terminal-text {
+  @apply font-mono text-cipher-primary text-xs tracking-tight;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-cipher-base;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-cipher-700 rounded-full hover:bg-cipher-primary/50 transition-colors;
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scan-line {
+  @apply absolute inset-0 pointer-events-none opacity-10;
+  background: linear-gradient(to bottom, transparent, #00D4FF, transparent);
+  animation: scan-line 4s linear infinite;
+}

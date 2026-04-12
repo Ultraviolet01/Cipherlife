@@ -1,0 +1,21 @@
+{
+  "name": "cipherlife",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && node index.js",
+    "frontend": "cd frontend && npm run dev",
+    "contracts:node": "cd contracts && npx hardhat node",
+    "contracts:deploy": "cd contracts && npx hardhat run scripts/deploy.js --network sepolia",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,9 @@
+concrete-ml
+numpy
+pandas
+scikit-learn
+fastapi
+uvicorn
+pydantic
+python-multipart
+hashlib
