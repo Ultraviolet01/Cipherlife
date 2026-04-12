@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
 
 @theme {
   --color-cipher-base: #0A0F1E;
@@ -12,57 +13,118 @@
 }
 
 @layer base {
+  :root {
+    --text-primary: #FFFFFF;
+    --text-muted: #94A3B8;
+  }
+
   body {
     @apply bg-cipher-base text-slate-100 antialiased selection:bg-cipher-primary/30;
     margin: 0;
     min-height: 100vh;
+    font-family: 'Inter', system-ui, sans-serif;
+    letter-spacing: 0;
     background-image: 
       radial-gradient(circle at 50% 50%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
-      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      linear-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
     background-size: 100% 100%, 40px 40px, 40px 40px;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  p, span, div {
+    font-family: 'Inter', system-ui, sans-serif;
+    letter-spacing: 0;
   }
 }
 
 .glass {
   @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
+  border-radius: 16px;
+  transition: border-color 0.2s;
 }
 
-.glass-glow-primary {
-  @apply border-cipher-primary/30 shadow-[0_0_15px_rgba(0,212,255,0.2)];
+.glass:hover {
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
-.glass-glow-secondary {
-  @apply border-cipher-secondary/30 shadow-[0_0_15px_rgba(123,47,255,0.2)];
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 212, 255, 0.1);
+  border-top-color: #00D4FF;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-active {
+  animation: pulse-soft 3s ease-in-out infinite;
 }
 
 .gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-cipher-primary to-cipher-secondary;
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-cipher-primary to-white;
 }
 
-.terminal-text {
-  @apply font-mono text-cipher-primary text-xs tracking-tight;
-}
-
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-cipher-base;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-cipher-700 rounded-full hover:bg-cipher-primary/50 transition-colors;
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 2px;
 }
 
-@keyframes scan-line {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100%); }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.5);
 }
 
-.scan-line {
-  @apply absolute inset-0 pointer-events-none opacity-10;
-  background: linear-gradient(to bottom, transparent, #00D4FF, transparent);
-  animation: scan-line 4s linear infinite;
+/* Form Styling */
+.cipher-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 15px;
+  width: 100%;
+  transition: all 0.2s;
+}
+
+.cipher-input:focus {
+  border-color: #00D4FF;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
 }

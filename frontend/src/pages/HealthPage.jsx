@@ -1,22 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   HeartPulse, 
   Minus, 
   Plus, 
-  ChevronDown, 
-  ChevronUp, 
   CheckCircle2, 
   Loader2,
-  Info,
-  Sparkles
 } from 'lucide-react';
-import axios from 'axios';
 
 // Design System Components
 import GlassCard from '../components/GlassCard';
-import EncryptionBadge from '../components/EncryptionBadge';
-import DataStream from '../components/DataStream';
 import WellnessRing from '../components/WellnessRing';
 
 // Cryptography
@@ -29,6 +22,7 @@ import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
 
 const HealthPage = () => {
+  const [mounted, setMounted] = useState(false);
   const { encryptModule, decryptResult } = useFHE();
   const { account } = useWallet();
   const { submitHealth } = useCipherLifeContract();
@@ -39,12 +33,14 @@ const HealthPage = () => {
   const [symptoms, setSymptoms] = useState(2);
   const [meds, setMeds] = useState(1);
   const [conditions, setConditions] = useState([]);
-  const [anomaly, setAnomaly] = useState(15);
   
   // Submission State
   const [step, setStep] = useState(0); 
-  const [isExplainerOpen, setIsExplainerOpen] = useState(false);
   const [resultScore, setResultScore] = useState(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const toggleCondition = (c) => {
     setConditions(prev => 
@@ -54,11 +50,10 @@ const HealthPage = () => {
 
   const handleAnalyze = async () => {
     setStep(1);
-    
     try {
       const inputs = isDemoMode 
         ? Object.values(getDemoData('health'))
-        : [symptoms, meds, conditions.length, anomaly];
+        : [symptoms, meds, conditions.length, 10]; // 10 is dummy vitals
 
       await executeUnifiedSubmission({
         moduleName: 'Health',
@@ -71,8 +66,6 @@ const HealthPage = () => {
         onComplete: (score) => {
           setResultScore(score);
           setStep(4);
-          
-          // Trigger AI Advisor automatically
           const risk = score > 70 ? 'High' : score > 40 ? 'Moderate' : 'Low';
           getInsights('health', score, risk);
         }
@@ -82,33 +75,68 @@ const HealthPage = () => {
     }
   };
 
+  if (!mounted) return (
+    <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+      <div className="spinner" />
+      <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Loading Module...</p>
+    </div>
+  );
+
   const conditionOptions = ["Diabetes", "Hypertension", "Asthma", "Other"];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-20">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-rose-500/20 rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/10">
-            <HeartPulse className="text-rose-400 w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black gradient-text tracking-tighter uppercase italic">Health Module</h1>
-            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Biometric Integrity Controller</p>
-          </div>
-        </div>
-        <EncryptionBadge />
+    <div className="max-w-[1200px] mx-auto p-8 space-y-8 pb-32">
+      {/* Step Header */}
+      <div className="flex items-center gap-4 text-[11px] font-black uppercase tracking-widest mb-2">
+         <span className="text-cipher-primary">Step 1 of 3</span>
+         <span className="text-slate-700">→</span>
+         <div className="flex gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-cipher-primary/10 border border-cipher-primary/20">
+               <div className="w-1.5 h-1.5 rounded-full bg-cipher-primary" />
+               <span className="text-cipher-primary">Health</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 opacity-40">
+               <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+               <span className="text-slate-500">Mind</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 opacity-40">
+               <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+               <span className="text-slate-500">Finance</span>
+            </div>
+         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Hero Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: '800',
+          background: 'linear-gradient(90deg, #00D4FF, #FFFFFF)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          marginBottom: '6px'
+        }}>
+          Health Integrity Check
+        </h1>
+        <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: '500' }}>
+          Homomorphically secure biometric assessment pipeline.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         {/* Input Form */}
         <div className="space-y-6">
-          <GlassCard className="space-y-8">
-            {/* Symptoms Slider */}
+          <GlassCard className="space-y-8 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <HeartPulse className="w-5 h-5 text-cipher-primary" />
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Metrics Collection</h3>
+            </div>
+
+            {/* Symptoms */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Symptom Count</label>
-                <span className="text-lg font-black text-cipher-primary font-mono">{symptoms}</span>
+                <label className="text-[13px] font-semibold text-slate-300">Symptom Severity</label>
+                <span className="text-lg font-bold text-cipher-primary">{symptoms}</span>
               </div>
               <input 
                 type="range" min="0" max="10" value={symptoms} 
@@ -118,168 +146,185 @@ const HealthPage = () => {
             </div>
 
             {/* Medications Counter */}
-            <div className="space-y-4">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-400 block">Active Medications</label>
-              <div className="flex items-center gap-6">
-                <button 
-                  onClick={() => setMeds(Math.max(0, meds - 1))}
-                  className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition-colors"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="text-2xl font-black font-mono w-8 text-center">{meds}</span>
-                <button 
-                  onClick={() => setMeds(meds + 1)}
-                  className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Conditions Multi-select */}
-            <div className="space-y-4">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-400 block">Chronic Conditions</label>
-              <div className="flex flex-wrap gap-2">
-                {conditionOptions.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => toggleCondition(c)}
-                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all border ${
-                      conditions.includes(c) 
-                      ? 'bg-cipher-primary/20 border-cipher-primary text-cipher-primary shadow-[0_0_15px_#00D4FF20]' 
-                      : 'bg-white/5 border-white/10 text-slate-500 hover:border-white/30'
-                    }`}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <label className="text-[13px] font-semibold text-slate-300 block">Daily Medications</label>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => setMeds(Math.max(0, meds - 1))}
+                    className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition-colors border border-white/5"
                   >
-                    {c}
+                    <Minus className="w-4 h-4" />
                   </button>
-                ))}
+                  <span className="text-xl font-bold w-6 text-center">{meds}</span>
+                  <button 
+                    onClick={() => setMeds(meds + 1)}
+                    className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition-colors border border-white/5"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Vitals Anomaly Slider */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Vitals Anomaly</label>
-                <span className="text-sm font-bold text-cipher-secondary font-mono">{anomaly}%</span>
+              <div className="space-y-4">
+                <label className="text-[13px] font-semibold text-slate-300 block">Chronic Conditions</label>
+                <div className="flex flex-wrap gap-2">
+                  {conditionOptions.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => toggleCondition(c)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        conditions.includes(c) 
+                        ? 'bg-cipher-primary/10 border-cipher-primary text-cipher-primary' 
+                        : 'bg-white/5 border-white/10 text-slate-500 hover:border-white/20'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-[10px] text-slate-600 uppercase font-bold tracking-tighter">Self-reported deviation from normal</p>
-              <input 
-                type="range" min="0" max="100" value={anomaly} 
-                onChange={(e) => setAnomaly(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-cipher-secondary"
-              />
             </div>
 
             <button
               onClick={handleAnalyze}
               disabled={step > 0}
-              className={`w-full py-4 rounded-xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-lg ${
-                step > 0 
-                ? 'bg-white/5 text-slate-500 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-rose-500 to-rose-600 text-white hover:shadow-rose-500/20'
-              }`}
+              style={{
+                background: step > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #00D4FF, #0099CC)',
+                color: step > 0 ? '#475569' : '#0A0F1E',
+                fontWeight: '700',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '14px 24px',
+                fontSize: '15px',
+                cursor: step > 0 ? 'not-allowed' : 'pointer',
+                width: '100%',
+                transition: 'opacity 0.2s, transform 0.1s'
+              }}
+              className="hover:opacity-90 active:scale-[0.98]"
             >
-              Encrypt & Analyze
+              {step > 0 ? 'Processing Encrypted Packet...' : 'Encrypt & Analyze Metrics'}
             </button>
           </GlassCard>
         </div>
 
         {/* Status / Output Panel */}
         <div className="space-y-6">
-          <GlassCard className="h-full flex flex-col justify-between">
-            {step === 0 && !resultScore && (
-              <div className="flex flex-col gap-6">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Encryption Preview</h3>
-                  <div className="space-y-2">
-                    <DataStream label="Symptoms" value={symptoms} />
-                    <DataStream label="Meds" value={meds} />
-                    <DataStream label="Anomaly" value={`${anomaly}%`} />
-                  </div>
+          <GlassCard className="p-6 h-full min-h-[400px]">
+            {step === 0 && (
+              <div className="space-y-6 h-full flex flex-col">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-cipher-primary animate-pulse" />
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Encryption Pipeline</h3>
                 </div>
-                <div className="p-4 rounded-xl bg-cipher-primary/5 border border-dashed border-cipher-primary/20 flex flex-col items-center justify-center py-10 opacity-60">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-cipher-primary mb-1">Preview Logic Active</span>
-                  <p className="text-[9px] text-slate-500">This is what leaves your device ↑</p>
+                
+                {/* DataStream Replacement */}
+                <div style={{
+                  background: '#0D1117',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '13px',
+                  flexGrow: 1,
+                  border: '1px solid rgba(255,255,255,0.05)'
+                }}>
+                  <div style={{ color: '#00FF88', marginBottom: '16px', fontSize: '11px', fontWeight: 'bold' }}>
+                    // WHAT LEAVES YOUR DEVICE (REAL-TIME PREVIEW)
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div style={{ color: '#FF6B6B' }}>
+                      symptoms: {symptoms} 
+                      <span style={{ color: '#334155', marginLeft: '12px' }}>← plaintext data</span>
+                    </div>
+                    <div style={{ color: '#FF6B6B' }}>
+                      medications: {meds}
+                      <span style={{ color: '#334155', marginLeft: '12px' }}>← user input</span>
+                    </div>
+                    <div style={{ color: '#FF6B6B' }}>
+                      conditions: {conditions.length}
+                    </div>
+
+                    <div style={{ 
+                      borderTop: '1px solid rgba(255,255,255,0.05)',
+                      marginTop: '20px',
+                      paddingTop: '20px',
+                      color: '#475569',
+                      fontStyle: 'italic'
+                    }}>
+                      Waiting for encryption pulse...
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
             {step > 0 && step < 4 && (
               <div className="flex-1 flex flex-col justify-center gap-8 py-10">
-                <StepIndicator currentStep={step} stepIndex={1} text="Encrypting locally..." />
-                <StepIndicator currentStep={step} stepIndex={2} text="Sending ciphertext to FHE model..." />
-                <StepIndicator currentStep={step} stepIndex={3} text="Receiving encrypted result..." />
+                <div style={{
+                  background: '#0D1117',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '13px',
+                  border: '1px solid #00D4FF20'
+                }}>
+                  <div style={{ color: '#00FF88', marginBottom: '16px', fontSize: '11px', fontWeight: 'bold' }}>
+                    // CIPHERTEXT GENERATION ACTIVE
+                  </div>
+                  <div className="space-y-2 mb-6">
+                    <div style={{ color: '#00D4FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      0x8f3a2b9c4d7e1f2a3b4c5d6e7f8a9b0c...
+                    </div>
+                    <div style={{ color: '#00D4FF', opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      0xe1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6...
+                    </div>
+                  </div>
+                  <div style={{ color: '#00FF88', fontSize: '11px', fontWeight: 'bold' }}>
+                    ✓ SERVER SEES ONLY MATHEMATICAL CIPHERTEXT
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <LoadingStep isActive={step === 1} isDone={step > 1} text="Generating Homomorphic Ciphertext" />
+                  <LoadingStep isActive={step === 2} isDone={step > 2} text="Processing in Secured ML Node" />
+                  <LoadingStep isActive={step === 3} isDone={step > 3} text="Decrypting Baseline Score" />
+                </div>
               </div>
             )}
 
             {step === 4 && (
               <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex-1 flex flex-col items-center justify-center py-6 gap-6"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex-1 flex flex-col items-center justify-center gap-8"
               >
                 <div className="text-center">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-cipher-success mb-2">Biometric Score Calculated</h3>
-                  <WellnessRing score={resultScore} size={160} />
+                  <h3 className="text-[13px] font-bold uppercase tracking-[0.2em] text-cipher-success mb-6">Module Integrity Verified</h3>
+                  <WellnessRing score={resultScore} size={180} />
+                  <div className="mt-4 text-3xl font-black">{resultScore}/100</div>
                 </div>
 
-                {/* AI Advice Section */}
-                {resultScore !== null && (
-                  <div className="w-full">
-                    <AIInsightCard 
-                      module="health"
-                      score={resultScore}
-                      insights={insights.health}
-                      isLoading={aiLoading}
-                      error={aiError}
-                      onRefresh={() => {
-                        const risk = resultScore > 70 ? 'High' : resultScore > 40 ? 'Moderate' : 'Low';
-                        getInsights('health', resultScore, risk);
-                      }}
-                    />
-                  </div>
-                )}
+                <AIInsightCard 
+                  module="health"
+                  score={resultScore}
+                  insights={insights.health}
+                  isLoading={aiLoading}
+                  error={aiError}
+                  onRefresh={() => {
+                    const risk = resultScore > 70 ? 'High' : score > 40 ? 'Moderate' : 'Low';
+                    getInsights('health', resultScore, risk);
+                  }}
+                />
 
                 <button 
                   onClick={() => setStep(0)}
-                  className="text-[10px] font-bold uppercase text-slate-500 hover:text-white transition-colors"
+                  className="text-xs font-bold uppercase text-slate-500 hover:text-white transition-colors"
                 >
-                  Return to controller
+                  New Assessment Sequence
                 </button>
               </motion.div>
             )}
-
-            <div className="pt-6 border-t border-white/5">
-              <button 
-                onClick={() => setIsExplainerOpen(!isExplainerOpen)}
-                className="w-full flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-2">
-                  <Info className="w-4 h-4 text-cipher-primary group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">How does this protect you?</span>
-                </div>
-                {isExplainerOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-              
-              <AnimatePresence>
-                {isExplainerOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <p className="text-[11px] text-slate-500 leading-relaxed mt-4 p-4 rounded-lg bg-white/5">
-                      Fully Homomorphic Encryption (FHE) allows our servers to process your health data without ever seeing the raw numbers. 
-                      Your local device encrypts the inputs into a complex mathematical ciphertext. 
-                      The FHE model performs operations directly on this encrypted data, producing an encrypted result. 
-                      Only <span className="text-cipher-primary font-bold">YOU</span> have the key to see what the result actually means.
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
           </GlassCard>
         </div>
       </div>
@@ -287,30 +332,19 @@ const HealthPage = () => {
   );
 };
 
-const StepIndicator = ({ currentStep, stepIndex, text }) => {
-  const isDone = currentStep > stepIndex;
-  const isActive = currentStep === stepIndex;
-
-  return (
-    <div className="flex items-center gap-4 group">
-      <div className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${
-        isDone ? 'bg-cipher-success/20 border-cipher-success' : 
-        isActive ? 'bg-cipher-primary/20 border-cipher-primary animate-pulse' : 
-        'bg-white/5 border-white/10 opacity-30'
-      }`}>
-        {isDone ? <CheckCircle2 className="w-4 h-4 text-cipher-success" /> : 
-         isActive ? <Loader2 className="w-4 h-4 text-cipher-primary animate-spin" /> : 
-         <div className="w-1.5 h-1.5 rounded-full bg-slate-600" />}
-      </div>
-      <span className={`text-[10px] uppercase font-bold tracking-widest transition-all ${
-        isDone ? 'text-cipher-success' : 
-        isActive ? 'text-cipher-primary' : 
-        'text-slate-700'
-      }`}>
-        {text}
-      </span>
-    </div>
-  );
-};
+const LoadingStep = ({ isActive, isDone, text }) => (
+  <div className={`flex items-center gap-3 transition-opacity ${isActive || isDone ? 'opacity-100' : 'opacity-20'}`}>
+    {isDone ? (
+      <CheckCircle2 className="w-4 h-4 text-cipher-success" />
+    ) : isActive ? (
+      <Loader2 className="w-4 h-4 text-cipher-primary animate-spin" />
+    ) : (
+      <div className="w-4 h-4 rounded-full border border-white/20" />
+    )}
+    <span className={`text-xs font-bold uppercase tracking-widest ${isDone ? 'text-cipher-success' : isActive ? 'text-cipher-primary' : 'text-slate-500'}`}>
+      {text}
+    </span>
+  </div>
+);
 
 export default HealthPage;

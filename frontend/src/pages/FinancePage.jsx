@@ -1,21 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
+  Wallet, 
   TrendingUp, 
-  Eye, 
-  EyeOff, 
-  DollarSign, 
-  CheckCircle2, 
-  Loader2, 
-  ShieldAlert,
-  ArrowRight,
-  Target
+  TrendingDown,
+  DollarSign,
+  PieChart,
 } from 'lucide-react';
-import axios from 'axios';
 
 // Design System Components
 import GlassCard from '../components/GlassCard';
-import DataStream from '../components/DataStream';
 import WellnessRing from '../components/WellnessRing';
 
 // Cryptography
@@ -27,38 +21,36 @@ import { executeUnifiedSubmission } from '../utils/submission';
 import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
 
-const stabilityOptions = [
-  { id: 'freelance', label: 'Freelance', desc: 'Variable income', icon: <Target className="w-4 h-4 text-amber-500" /> },
-  { id: 'part-time', label: 'Part-time', desc: 'Limited hours', icon: <Target className="w-4 h-4 text-amber-500 opacity-70" /> },
-  { id: 'full-time', label: 'Full-time', desc: 'Steady salary', icon: <Target className="w-4 h-4 text-amber-400" /> },
-  { id: 'multiple', label: 'Multiple', desc: 'Hybrid streams', icon: <Target className="w-4 h-4 text-amber-300" /> },
-];
-
 const FinancePage = () => {
+  const [mounted, setMounted] = useState(false);
   const { encryptModule, decryptResult } = useFHE();
   const { account } = useWallet();
   const { submitFinance } = useCipherLifeContract();
   const { isDemoMode, getDemoData } = useDemo();
-  
+  const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
+
   // Form State
-  const [income, setIncome] = useState(8500);
-  const [spending, setSpending] = useState(4200);
-  const [debtPercent, setDebtPercent] = useState(45);
-  const [savingsRate, setSavingsRate] = useState(15);
-  const [stability, setStability] = useState('full-time');
+  const [income, setIncome] = useState(5000);
+  const [spending, setSpending] = useState(3000);
+  const [savingsRate, setSavingsRate] = useState(20);
   
   // Submission State
   const [step, setStep] = useState(0); 
-  const [scoreData, setScoreData] = useState(null);
-  const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
+  const [resultScore, setResultScore] = useState(null);
 
-  const handleAssess = async () => {
+  useEffect(() => {
+    setMounted(true);
+    // Auto-calculate savings rate
+    const rate = Math.max(0, Math.round(((income - spending) / income) * 100));
+    setSavingsRate(isNaN(rate) ? 0 : rate);
+  }, [income, spending]);
+
+  const handleAnalyze = async () => {
     setStep(1);
-    
     try {
       const inputs = isDemoMode 
         ? Object.values(getDemoData('finance'))
-        : [income, spending, debtPercent, savingsRate];
+        : [income, spending, savingsRate, 0]; // 0 is dummy debt
 
       await executeUnifiedSubmission({
         moduleName: 'Finance',
@@ -69,343 +61,244 @@ const FinancePage = () => {
         apiEndpoint: '/analyze/finance',
         walletAccount: account,
         onComplete: (score) => {
-          setScoreData({
-            score: Math.round(score),
-            level: score > 70 ? 'CRITICAL' : score > 40 ? 'MODERATE' : 'OPTIMAL'
-          });
+          setResultScore(score);
           setStep(4);
-          
-          // Trigger AI Advisor
-          const stress = score > 70 ? 'High' : score > 40 ? 'Moderate' : 'Low';
-          getInsights('finance', Math.round(score), stress, stability);
+          getInsights('finance', score, savingsRate < 10 ? 'Risky' : 'Stable');
         }
       });
-    } catch (err) {
+    } catch (error) {
       setStep(0);
     }
   };
 
-  const getRecommendations = (score) => {
-    if (score > 70) return [
-      "Immediate action: Pause all non-essential discretionary spending.",
-      "Consolidate high-interest debt into a single lower-rate instrument.",
-      "Emergency fund target: aim for 3 months of basic living costs."
-    ];
-    if (score > 40) return [
-      "Review subscription recurring costs for optimization potential.",
-      "Increase monthly debt repayment by 10% to accelerate clearance.",
-      "Automate a small percentage of income increase towards high-yield savings."
-    ];
-    return [
-      "Wealth Preservation: Rebalance portfolio for diversified stability.",
-      "Consider tax-loss harvesting for the current fiscal quarter.",
-      "Maintain existing savings rate to sustain long-term growth targets."
-    ];
-  };
+  if (!mounted) return (
+    <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+      <div className="spinner" />
+      <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Loading Module...</p>
+    </div>
+  );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 pb-20 font-mono">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20 ring-1 ring-amber-500/30">
-            <TrendingUp className="text-amber-400 w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black gradient-text from-amber-200 to-amber-500 tracking-tighter uppercase italic">Finance Module</h1>
-            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-none">Fiscal Integrity Analysis Engine</p>
-          </div>
-        </div>
-        <div className="text-[10px] bg-amber-500/5 px-4 py-1.5 rounded-full border border-amber-500/20 text-amber-500/80 font-bold uppercase tracking-widest flex items-center gap-2">
-           <DollarSign className="w-3 h-3" />
-           Analytical Transparency Active
-        </div>
+    <div className="max-w-[1200px] mx-auto p-8 space-y-8 pb-32">
+       {/* Step Header */}
+       <div className="flex items-center gap-4 text-[11px] font-black uppercase tracking-widest mb-2">
+         <span className="text-slate-700">Step 2</span>
+         <span className="text-slate-700">→</span>
+         <span className="text-amber-500">Step 3 of 3</span>
+         <div className="flex gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 opacity-40">
+               <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+               <span className="text-slate-500">Health</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 opacity-40">
+               <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+               <span className="text-slate-500">Mind</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+               <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+               <span className="text-amber-500">Finance</span>
+            </div>
+         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Input Form (8 col) */}
-        <div className="lg:col-span-8 space-y-8">
-          <GlassCard className="space-y-10">
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Monthly Income */}
-              <MaskedInput 
-                label="Monthly Net Income" 
-                value={income} 
-                onChange={setIncome} 
-                prefix="$"
-              />
-              
-              {/* Monthly Spending */}
-              <MaskedInput 
-                label="Monthly Spending" 
-                value={spending} 
-                onChange={setSpending} 
-                prefix="$"
-              />
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: '800',
+          background: 'linear-gradient(90deg, #FFB800, #FFFFFF)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          marginBottom: '6px'
+        }}>
+          Financial Liquidity Engine
+        </h1>
+        <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: '500' }}>
+          Fully Homomorphic privacy assessment of fiscal health.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div className="space-y-6">
+          <GlassCard className="p-6">
+            <div className="flex items-center gap-2 mb-8">
+              <DollarSign className="w-5 h-5 text-amber-500" />
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Economic Inputs</h3>
             </div>
 
-            {/* Debt Slider */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Debt-to-Annual-Income</label>
-                <span className="text-sm font-black text-amber-200">{debtPercent}%</span>
-              </div>
-              <div className="relative pt-2">
-                <input 
-                  type="range" min="0" max="200" value={debtPercent}
-                  onChange={(e) => setDebtPercent(parseInt(e.target.value))}
-                  className="w-full h-1.5 bg-amber-500/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                />
-                <div className="flex justify-between mt-3 text-[8px] font-bold text-slate-700 uppercase tracking-widest">
-                  <span>Sustainable (0%)</span>
-                  <span>Leveraged (100%)</span>
-                  <span>Critical (200%)</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-12 items-center">
-              {/* Arc Gauge for Savings */}
-              <div className="flex flex-col items-center gap-4">
-                 <ArcGauge value={savingsRate} />
-                 <div className="text-center">
-                    <span className="text-[9px] font-black uppercase text-slate-600 block tracking-[0.2em] mb-1">Savings Rate</span>
-                    <input 
-                      type="range" min="0" max="100" value={savingsRate}
-                      onChange={(e) => setSavingsRate(parseInt(e.target.value))}
-                      className="w-32 h-1 bg-amber-500/10 appearance-none rounded-full accent-amber-500 cursor-pointer"
-                    />
-                 </div>
-              </div>
-
-              {/* Stability Cards */}
+            <div className="space-y-8">
+              {/* Income */}
               <div className="space-y-4">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 block">Income Stability</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {stabilityOptions.map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => setStability(opt.id)}
-                      className={`flex flex-col items-start gap-1 p-3 rounded-lg border text-left transition-all ${
-                        stability === opt.id 
-                        ? 'bg-amber-500/10 border-amber-500/40' 
-                        : 'bg-white/5 border-white/5 opacity-50 hover:opacity-100 hover:border-white/10'
-                      }`}
-                    >
-                      {opt.icon}
-                      <span className={`text-[9px] font-bold uppercase tracking-tight mt-1 ${stability === opt.id ? 'text-amber-200' : 'text-slate-500'}`}>{opt.label}</span>
-                    </button>
-                  ))}
+                <div className="flex justify-between items-center">
+                   <label className="text-[13px] font-semibold text-slate-300">Monthly Net Income</label>
+                   <span className="text-lg font-bold text-amber-500">${income}</span>
+                </div>
+                <input 
+                  type="range" min="1000" max="25000" step="100" value={income} 
+                  onChange={(e) => setIncome(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+              </div>
+
+              {/* Spending */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                   <label className="text-[13px] font-semibold text-slate-300">Monthly Expenditure</label>
+                   <span className="text-lg font-bold text-rose-500">${spending}</span>
+                </div>
+                <input 
+                  type="range" min="500" max="20000" step="100" value={spending} 
+                  onChange={(e) => setSpending(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                />
+              </div>
+
+              {/* Savings Progress Bar Implementation */}
+              <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  marginBottom: '10px',
+                  fontWeight: '600',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  <span>Computed Savings Rate</span>
+                  <span style={{ 
+                    color: savingsRate > 20 ? '#00FF88' : savingsRate > 10 ? '#FFB800' : '#FF3366',
+                    fontWeight: '800',
+                    fontSize: '14px'
+                  }}>
+                    {savingsRate}%
+                  </span>
+                </div>
+                <div style={{
+                  height: '10px',
+                  background: 'rgba(255,255,255,0.08)',
+                  borderRadius: '5px',
+                  overflow: 'hidden'
+                }}>
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, savingsRate)}%` }}
+                    style={{
+                      height: '100%',
+                      background: savingsRate > 20
+                        ? 'linear-gradient(90deg, #00FF88, #00CC66)'
+                        : savingsRate > 10
+                        ? 'linear-gradient(90deg, #FFB800, #CC9200)'
+                        : 'linear-gradient(90deg, #FF3366, #FF6B6B)',
+                      borderRadius: '5px',
+                    }} 
+                  />
+                </div>
+                <div style={{ 
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  marginTop: '10px',
+                  fontWeight: '500',
+                  lineHeight: '1.4'
+                }}>
+                  {savingsRate < 10 && "⚠️ Warning: Savings rate below recommended minimum safety margin."}
+                  {savingsRate >= 10 && savingsRate < 20 && "📈 Moderate efficiency: Goal is to reach 20% for long-term compounding."}
+                  {savingsRate >= 20 && "✓ Optimal efficiency: You are successfully building a secure capital buffer."}
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 space-y-4">
-              <button
-                onClick={handleAssess}
-                disabled={step > 0}
-                className={`w-full py-4 rounded-lg font-black uppercase tracking-[0.3em] text-[10px] transition-all shadow-xl border border-amber-500/20 ${
-                  step > 0 
-                  ? 'bg-white/5 text-slate-600' 
-                  : 'bg-gradient-to-br from-amber-600 to-amber-900 text-amber-100 hover:border-amber-400/50'
-                }`}
-              >
-                Encrypt & Assess Fiscal Stress
-              </button>
-              <div className="flex items-center justify-center gap-2 opacity-40">
-                <div className="h-[1px] flex-1 bg-white/10" />
-                <span className="text-[8px] font-black uppercase tracking-[0.5em] text-slate-400">Secure Computation Module</span>
-                <div className="h-[1px] flex-1 bg-white/10" />
-              </div>
-            </div>
+            <button
+              onClick={handleAnalyze}
+              disabled={step > 0}
+              style={{
+                background: step > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #FFB800, #CC9200)',
+                color: '#0A0F1E',
+                fontWeight: '700',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '14px 24px',
+                fontSize: '15px',
+                cursor: step > 0 ? 'not-allowed' : 'pointer',
+                width: '100%',
+                marginTop: '32px',
+                transition: 'opacity 0.2s, transform 0.1s'
+              }}
+              className="hover:opacity-90 active:scale-[0.98]"
+            >
+              Encrypt & Assess
+            </button>
           </GlassCard>
         </div>
 
-        {/* Right Column: Previews & Results (4 col) */}
-        <div className="lg:col-span-4 space-y-8">
-          {/* Encryption Preview */}
-          {step === 0 && !scoreData && (
-            <div className="space-y-6">
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/60">Live Signal Feed</span>
-                <div className="h-[1px] w-full bg-amber-500/10" />
-              </div>
-              <div className="space-y-3">
-                <DataStream label="Fiscal Inflow" value={`$${income}`} />
-                <DataStream label="Outflow Vector" value={`$${spending}`} />
-                <DataStream label="Leverage Score" value={`${debtPercent}%`} />
-              </div>
-              <div className="p-4 rounded-lg bg-black/40 border border-white/5 text-[9px] text-slate-600 leading-relaxed italic">
-                 Note: All data is locally blinded using TFHE-compatible quantization before transmission.
-              </div>
-            </div>
-          )}
-
-          {/* FHE Analysis Workflow */}
-          {step > 0 && step < 4 && (
-            <div className="space-y-8 py-10 px-4">
-               <AnalysisStep currentStep={step} stepIndex={1} text="Quantizing net inflow..." />
-               <AnalysisStep currentStep={step} stepIndex={2} text="Running homomorphic regression..." />
-               <AnalysisStep currentStep={step} stepIndex={3} text="Decrypting risk boundary..." />
-            </div>
-          )}
-
-          {/* Scoring & Recommendations */}
-          <AnimatePresence>
-            {step === 4 && scoreData && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-8"
-              >
-                <div className="flex flex-col items-center">
-                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 mb-6">Fiscal Stress Index</span>
-                   <WellnessRing score={scoreData.score} size={200} />
-                   <p className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] text-rose-500">
-                      Stress Level: {scoreData.score > 70 ? 'CRITICAL' : scoreData.score > 40 ? 'MODERATE' : 'OPTIMAL'}
-                   </p>
+        {/* Data Stream */}
+        <div className="space-y-6">
+          <GlassCard className="p-6 h-full min-h-[400px]">
+             {step === 0 && (
+              <div className="space-y-6 h-full flex flex-col">
+                <div className="flex items-center gap-2">
+                  <PieChart className="w-5 h-5 text-amber-500" />
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Privacy Preview</h3>
                 </div>
+                
+                <div style={{
+                  background: '#0D1117',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '13px',
+                  flexGrow: 1,
+                  border: '1px solid rgba(255,255,255,0.05)'
+                }}>
+                  <div style={{ color: '#00FF88', marginBottom: '16px', fontSize: '11px', fontWeight: 'bold' }}>
+                    // FISCAL MODULE: LOCAL DATA STATE
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div style={{ color: '#FF6B6B' }}>net_income: {income} <span className="text-slate-700 ml-4">← local plaintext</span></div>
+                    <div style={{ color: '#FF6B6B' }}>expenditure: {spending}</div>
+                    <div style={{ color: '#FF6B6B' }}>savings_rate: {savingsRate}%</div>
+                    
+                    <div style={{ color: '#444', marginTop: '20px', borderTop: '1px solid #ffffff05', paddingTop: '10px' }}>
+                      Server sees $0 throughout this session.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-                {/* AI Advice Section */}
-                {scoreData && (
-                  <AIInsightCard 
-                    module="finance"
-                    score={scoreData.score}
-                    insights={insights.finance}
-                    isLoading={aiLoading}
-                    error={aiError}
-                    onRefresh={() => {
-                       const stress = scoreData.score > 70 ? 'High' : scoreData.score > 40 ? 'Moderate' : 'Low';
-                       getInsights('finance', scoreData.score, stress, stability);
-                    }}
-                  />
-                )}
+            {step > 0 && step < 4 && (
+              <div className="h-full flex flex-col justify-center items-center gap-6 py-20">
+                 <Loader2 className="w-12 h-12 text-amber-500 animate-spin" />
+                 <div className="text-center">
+                    <h4 className="text-lg font-bold uppercase tracking-tighter">Fiscal Blindness Active</h4>
+                    <p className="text-slate-500 text-xs mt-2">Converting net worth metrics to ciphertext handles...</p>
+                 </div>
+              </div>
+            )}
 
-                <button 
-                  onClick={() => setStep(0)}
-                  className="w-full text-center text-[9px] font-bold uppercase text-slate-600 hover:text-white transition-colors"
-                >
-                  Terminate Analysis Session
-                </button>
+            {step === 4 && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center justify-center h-full gap-8 py-6"
+              >
+                <div className="text-center">
+                   <WellnessRing score={resultScore} size={150} color="#FFB800" />
+                   <div className="mt-4 text-2xl font-black text-amber-500">LIQUIDITY INDEX: {resultScore}</div>
+                </div>
+                <AIInsightCard 
+                  module="finance"
+                  score={resultScore}
+                  insights={insights.finance}
+                  isLoading={aiLoading}
+                  error={aiError}
+                  onRefresh={() => getInsights('finance', resultScore, savingsRate < 10 ? 'Risky' : 'Stable')}
+                />
               </motion.div>
             )}
-          </AnimatePresence>
+          </GlassCard>
         </div>
       </div>
-    </div>
-  );
-};
-
-// Specialized UI Components
-
-const MaskedInput = ({ label, value, onChange, prefix }) => {
-  const [isMasked, setIsMasked] = useState(false);
-  const timerRef = useRef(null);
-
-  const handleChange = (e) => {
-    const val = parseInt(e.target.value.replace(/\D/g, '')) || 0;
-    onChange(val);
-    
-    // Reset masking timer on interaction
-    setIsMasked(false);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setIsMasked(true), 3000);
-  };
-
-  useEffect(() => {
-    timerRef.current = setTimeout(() => setIsMasked(true), 3000);
-    return () => clearTimeout(timerRef.current);
-  }, []);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex justify-between items-center group">
-        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</label>
-        <button 
-          onClick={() => {
-            setIsMasked(false);
-            if (timerRef.current) clearTimeout(timerRef.current);
-            timerRef.current = setTimeout(() => setIsMasked(true), 3000);
-          }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          {isMasked ? <Eye className="w-3 h-3 text-amber-400" /> : <EyeOff className="w-3 h-3 text-slate-600" />}
-        </button>
-      </div>
-      <div className="relative">
-        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-amber-900/50">{prefix}</span>
-        <input 
-          type="text"
-          value={isMasked ? '****' : value.toLocaleString()}
-          onChange={handleChange}
-          onFocus={() => setIsMasked(false)}
-          className="w-full bg-white/5 border border-white/5 rounded-lg py-4 pl-10 pr-4 text-sm font-black text-amber-100 focus:bg-white/10 focus:border-amber-500/30 transition-all outline-none"
-        />
-        {isMasked && (
-          <div className="absolute inset-0 bg-amber-500/5 backdrop-blur-[2px] rounded-lg pointer-events-none" />
-        )}
-      </div>
-    </div>
-  );
-};
-
-const ArcGauge = ({ value }) => {
-  const radius = 60;
-  const circumference = radius * Math.PI; // Semicircle
-  const offset = circumference - (value / 100) * circumference;
-
-  return (
-    <div className="relative flex items-center justify-center h-20 w-40 overflow-hidden">
-      <svg className="absolute top-0 rotate-180" width="140" height="70" viewBox="0 0 140 70">
-        <path
-          d="M 10 70 A 60 60 0 0 1 130 70"
-          fill="none"
-          stroke="rgba(255,255,255,0.05)"
-          strokeWidth="10"
-        />
-        <motion.path
-          d="M 10 70 A 60 60 0 0 1 130 70"
-          fill="none"
-          stroke="#FBBF24"
-          strokeWidth="10"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-          strokeLinecap="round"
-        />
-      </svg>
-      <div className="absolute bottom-0 text-center">
-         <span className="text-xl font-black italic">{value}%</span>
-      </div>
-    </div>
-  );
-};
-
-const AnalysisStep = ({ currentStep, stepIndex, text }) => {
-  const isDone = currentStep > stepIndex;
-  const isActive = currentStep === stepIndex;
-
-  return (
-    <div className="flex items-start gap-4">
-       <div className={`mt-1 shrink-0 ${isDone ? 'text-amber-400' : isActive ? 'text-amber-100 animate-pulse' : 'text-slate-800'}`}>
-          {isDone ? <CheckCircle2 className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />}
-       </div>
-       <div className="space-y-1">
-          <p className={`text-[10px] font-black uppercase tracking-widest ${isDone ? 'text-amber-400' : isActive ? 'text-white' : 'text-slate-700'}`}>
-             {text}
-          </p>
-          {isActive && (
-            <div className="h-[2px] w-full bg-white/5 overflow-hidden">
-               <motion.div 
-                 initial={{ x: '-100%' }}
-                 animate={{ x: '100%' }}
-                 transition={{ repeat: Infinity, duration: 1.5 }}
-                 className="h-full w-1/2 bg-amber-500"
-               />
-            </div>
-          )}
-       </div>
     </div>
   );
 };

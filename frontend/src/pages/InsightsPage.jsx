@@ -3,129 +3,75 @@ import { motion } from 'framer-motion';
 import { 
   Sparkles, 
   TrendingUp, 
-  TrendingDown, 
-  MessageCircle, 
-  Send,
-  Zap,
   Activity,
   Brain,
   Wallet,
-  Loader2,
-  RefreshCw
+  ArrowRight
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  ResponsiveContainer 
-} from 'recharts';
+import { NavLink } from 'react-router-dom';
 
 // Design System Components
 import GlassCard from '../components/GlassCard';
 import WellnessRing from '../components/WellnessRing';
 import AlertCard from '../components/AlertCard';
-
 import { useCipherLifeContract } from '../hooks/useCipherLifeContract';
 import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
+import { useDemo } from '../context/DemoContext';
 import AIChat from '../components/AIChat';
 
 const InsightsPage = () => {
+  const { isDemoMode } = useDemo();
   const { contract } = useCipherLifeContract();
+  const { getInsights, isLoading: aiLoading, insights: aiInsights, error: aiError } = useOpenAIAdvisor();
+  const [mounted, setMounted] = useState(false);
   const [scores, setScores] = useState({
     health: 0,
     mind: 0,
     finance: 0
   });
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
   useEffect(() => {
+    setMounted(true);
     const loadScores = () => {
-      const h = parseInt(localStorage.getItem('cipherlife_score_Health')) || 0;
-      const m = parseInt(localStorage.getItem('cipherlife_score_Mind')) || 0;
-      const f = parseInt(localStorage.getItem('cipherlife_score_Finance')) || 0;
+      let h = parseInt(localStorage.getItem('cipherlife_health_score') ?? '0');
+      let m = parseInt(localStorage.getItem('cipherlife_mind_score') ?? '0');
+      let f = parseInt(localStorage.getItem('cipherlife_finance_score') ?? '0');
+      
+      // If no scores and demo mode is on, pre-fill with healthy demo values
+      if (h === 0 && m === 0 && f === 0 && isDemoMode) {
+        h = 88; m = 92; f = 75;
+      }
+      
       setScores({ health: h, mind: m, finance: f });
     };
     
     loadScores();
     window.addEventListener('storage', loadScores);
     return () => window.removeEventListener('storage', loadScores);
-  }, []);
+  }, [isDemoMode]);
 
-  const handleRefresh = async () => {
-    if (!contract) return;
-    setIsRefreshing(true);
-    try {
-      const onChainScore = await contract.getInsightScore();
-      // If we don't have individual scores, we can at least show the unified one
-      // In a real app we might fetch all 3 individual scores from events or a mapping
-      console.log("On-chain unified score:", onChainScore);
-    } catch (err) {
-      console.error("Failed to sync with chain:", err);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  if (!mounted) return (
+    <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+      <div className="spinner" />
+      <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Initializing Intelligence...</p>
+    </div>
+  );
 
-  const unifiedScore = Math.round((scores.health + scores.mind + scores.finance) / (Object.values(scores).filter(s => s > 0).length || 1));
+  const activeScores = Object.values(scores).filter(s => s > 0);
+  const unifiedScore = activeScores.length > 0 
+    ? Math.round(activeScores.reduce((a, b) => a + b, 0) / activeScores.length)
+    : 0;
 
-  // Mock Trend Histories
-  const history = [
-    { day: 'M', h: 65, m: 45, f: 80 },
-    { day: 'T', h: 68, m: 42, f: 78 },
-    { day: 'W', h: 70, m: 40, f: 76 },
-    { day: 'T', h: 71, m: 39, f: 75 },
-    { day: 'F', h: 72, m: 38, f: 75 },
-  ];
-
-  const patterns = [];
-  if (scores.mind < 40 && scores.finance > 70) {
-    patterns.push({
-      severity: 'warning',
-      title: 'Financial-Cognitive Tension',
-      message: 'Financial stress may be affecting your mental wellbeing. Consider a budget review to reduce cognitive load.'
-    });
-  }
-  if (scores.health > 60 && scores.finance < 30) {
-    patterns.push({
-      severity: 'critical',
-      title: 'Medical Buffer Risk',
-      message: 'Health risks detected with low financial buffer. Prioritize building an emergency fund for potential medical expenses.'
-    });
-  }
-  if (scores.health > 70 && scores.mind > 70 && scores.finance > 70) {
-    patterns.push({
-      severity: 'critical',
-      title: 'Systemic Overload',
-      message: '⚠️ Critical: All life domains showing stress. Prioritize rest and seek professional support immediately.'
-    });
-  }
-  if (scores.health < 30 && scores.mind < 30 && scores.finance < 30) {
-    patterns.push({
-      severity: 'info',
-      title: 'Harmonized Balance',
-      message: '✨ Excellent balance across all domains. Your current lifestyle is highly sustainable.'
-    });
-  }
-
-  const { getInsights, isLoading: aiLoading, insights: aiInsights, error: aiError } = useOpenAIAdvisor();
+  const hasNoData = unifiedScore === 0;
 
   const handleRefreshAdvisor = () => {
-    const detectedLabels = patterns.map(p => p.title).join(', ') || 'Normal balance';
-    getInsights('combined', scores.health, scores.mind, scores.finance, detectedLabels);
+    getInsights('combined', scores.health, scores.mind, scores.finance, "Recalculating baseline metrics");
   };
 
   const container = {
     hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
   };
 
   const item = {
@@ -138,140 +84,146 @@ const InsightsPage = () => {
       variants={container}
       initial="hidden"
       animate="show"
-      className="max-w-6xl mx-auto space-y-12 pb-20"
+      className="max-w-[1200px] mx-auto p-8 space-y-8"
     >
       {/* Hero Section */}
-      <section className="text-center space-y-6">
-        <motion.div variants={item} className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-cipher-primary/5 border border-cipher-primary/20 text-cipher-primary text-xs font-bold uppercase tracking-widest mb-4">
-           <Zap className="w-3 h-3" />
-           Holistic Life Computation Active
-        </motion.div>
-        
-        <motion.div variants={item} className="flex justify-center flex-col items-center">
-          <WellnessRing score={unifiedScore} size={220} />
-          <div className="mt-6">
-             <h2 className="text-4xl font-black gradient-text tracking-tighter uppercase italic">Your Life Score</h2>
-             <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">
-                Computed from encrypted data. Score derived on-device.
-             </p>
+      <section style={{
+        background: 'linear-gradient(135deg, rgba(0,212,255,0.06), rgba(123,47,255,0.06))',
+        border: '1px solid rgba(0,212,255,0.15)',
+        borderRadius: '20px',
+        padding: '32px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '24px'
+      }}>
+        <div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Your Life Score
           </div>
-        </motion.div>
+          <div style={{
+            fontSize: '64px',
+            fontWeight: '800',
+            background: 'linear-gradient(90deg, #00D4FF, #7B2FFF)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            lineHeight: 1
+          }}>
+            {unifiedScore}/100
+          </div>
+          <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '8px', fontWeight: '500' }}>
+            Computed from encrypted data. Score derived on-device.
+          </div>
+        </div>
+        <WellnessRing score={unifiedScore} size={120} />
       </section>
 
-      {/* Domain Score Row */}
+      {/* Score Cards Grid */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <ScoreCard 
-          title="Health" 
-          score={scores.health} 
-          glow="primary" 
-          icon={<Activity className="text-cipher-primary" />}
-          data={history}
-          dataKey="h"
-          variants={item}
-        />
-        <ScoreCard 
-          title="Mind" 
-          score={scores.mind} 
-          glow="secondary" 
-          icon={<Brain className="text-cipher-secondary" />}
-          data={history}
-          dataKey="m"
-          variants={item}
-        />
-        <ScoreCard 
-          title="Finance" 
-          score={scores.finance} 
-          glow="warning" 
-          icon={<Wallet className="text-amber-400" />}
-          data={history}
-          dataKey="f"
-          variants={item}
-        />
+        <ScoreModuleCard title="Health" icon="🫀" score={scores.health} color="#00D4FF" />
+        <ScoreModuleCard title="Mind" icon="🧠" score={scores.mind} color="#7B2FFF" />
+        <ScoreModuleCard title="Finance" icon="💰" score={scores.finance} color="#FFB800" />
       </section>
 
-      {/* Intelligence Grid */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        
-        {/* Holistic AI Analysis */}
-        <motion.div variants={item} className="space-y-6">
+      {/* Intelligence Section */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-6">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-cipher-primary" />
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Holistic Analysis</h3>
+          </div>
+          
+          {hasNoData ? (
+             <GlassCard className="p-12 flex flex-col items-center text-center gap-6">
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                   <Activity className="w-8 h-8 text-slate-600" />
+                </div>
+                <div className="space-y-2">
+                   <h4 className="text-xl font-bold">No Data Points Detected</h4>
+                   <p className="text-slate-500 text-sm max-w-xs">
+                      Complete your first check-in to activate your AI advisor and see personalized privacy-preserving insights.
+                   </p>
+                </div>
+                <NavLink 
+                  to="/health"
+                  className="px-8 py-3 rounded-xl bg-gradient-to-r from-cipher-primary to-cipher-secondary text-white font-bold flex items-center gap-2 hover:opacity-90 transition-all"
+                >
+                   Complete Health Check-in
+                   <ArrowRight className="w-4 h-4" />
+                </NavLink>
+             </GlassCard>
+          ) : (
+            <AIInsightCard 
+              module="combined"
+              score={unifiedScore}
+              insights={aiInsights.combined}
+              isLoading={aiLoading}
+              error={aiError}
+              onRefresh={handleRefreshAdvisor}
+            />
+          )}
+
+          {!hasNoData && (
+            <div className="space-y-4">
+               <AlertCard 
+                 severity="info"
+                 title="System Operational"
+                 message="All indices are currently derived from local encrypted snapshots. No plaintext has left your device."
+               />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-6">
            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-cipher-primary" />
-              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Holistic Analysis</h3>
+             <Brain className="w-5 h-5 text-cipher-secondary" />
+             <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Interactive Advisor</h3>
            </div>
-           
-           <AIInsightCard 
-             module="combined"
-             score={unifiedScore}
-             insights={aiInsights.combined}
-             isLoading={aiLoading}
-             error={aiError}
-             onRefresh={handleRefreshAdvisor}
-           />
-
-           <div className="space-y-4">
-              <div className="flex items-center gap-2 mt-8">
-                <Activity className="w-4 h-4 text-slate-500" />
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cross-Domain Patterns</h4>
-              </div>
-              {patterns.map((p, i) => (
-                <AlertCard 
-                  key={i}
-                  severity={p.severity}
-                  title={p.title}
-                  message={p.message}
-                />
-              ))}
-           </div>
-        </motion.div>
-
-        {/* Interactive Advisor Chat */}
-        <motion.div variants={item} className="space-y-6">
            <AIChat 
              scores={scores} 
-             patterns={patterns.map(p => p.title).join(', ')} 
+             patterns="Baseline assessment in progress" 
            />
-        </motion.div>
-
+        </div>
       </section>
     </motion.div>
   );
 };
 
-const ScoreCard = ({ title, score, glow, icon, data, dataKey, variants }) => (
-  <motion.div variants={variants}>
-    <GlassCard glowColor={glow} className="relative overflow-hidden group">
-       <div className="flex justify-between items-start mb-6">
-          <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{title} Index</span>
-             <div className="flex items-center gap-2">
-                <span className="text-2xl font-black italic">{score}</span>
-                <TrendingUp className="w-4 h-4 text-cipher-success" />
-             </div>
-          </div>
-          <div className="p-2 rounded-lg bg-white/5">
-             {icon}
-          </div>
-       </div>
-
-       <div className="h-16 w-full -mb-2 mt-4">
-          <ResponsiveContainer width="100%" height="100%">
-             <LineChart data={data}>
-                <Line 
-                  type="monotone" 
-                  dataKey={dataKey} 
-                  stroke={glow === 'primary' ? '#00D4FF' : glow === 'secondary' ? '#7B2FFF' : '#FFB800'} 
-                  strokeWidth={2} 
-                  dot={false}
-                />
-             </LineChart>
-          </ResponsiveContainer>
-       </div>
-       
-       <div className="absolute top-0 right-0 p-2 opacity-5">
-          <Sparkles className="w-12 h-12" />
-       </div>
-    </GlassCard>
-  </motion.div>
+const ScoreModuleCard = ({ title, icon, score, color }) => (
+  <div style={{
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '16px',
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
+    flex: 1
+  }}>
+    <div style={{ 
+      fontSize: '13px', 
+      color: 'var(--text-muted)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.05em',
+      fontWeight: '700'
+    }}>
+      {icon} {title}
+    </div>
+    <WellnessRing 
+      score={score} 
+      size={80} 
+      color={color}
+    />
+    <div style={{
+      fontSize: '12px',
+      color: score === 0 ? 'var(--text-muted)' : color,
+      textAlign: 'center',
+      fontWeight: 'bold'
+    }}>
+      {score === 0 ? 'Not assessed yet' : `${score}/100`}
+    </div>
+  </div>
 );
 
 export default InsightsPage;

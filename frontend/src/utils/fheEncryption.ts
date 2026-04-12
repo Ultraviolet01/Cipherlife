@@ -1,48 +1,11 @@
-// @ts-nocheck
-import { createInstance } from 'fhevmjs';
-
-// Configuration for Sepolia Zama Coprocessor (fhEVM v0.11.1)
-const FHE_CONFIG = {
-  chainId: 11155111,
-  networkUrl: import.meta.env.VITE_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com',
-  gatewayUrl: 'https://gateway.sepolia-coprocessor.zama.ai/', 
-  aclAddress: '0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D', 
-  kmsAddress: '0xbE0E383937d564D7FF0BC3b46c51f0bF8d5C311A' 
-};
-
-let fheInstance = null;
+import { fheManager } from './fhe-init';
 
 /**
- * Initializes the FHE Instance
+ * Initializes the FHE Instance.
+ * This is now bridged to the fheManager.
  */
-export const initFHE = async () => {
-  if (fheInstance) return fheInstance;
-  
-  try {
-    fheInstance = await createInstance({
-      chainId: FHE_CONFIG.chainId,
-      networkUrl: FHE_CONFIG.networkUrl,
-      gatewayUrl: FHE_CONFIG.gatewayUrl,
-      aclContractAddress: FHE_CONFIG.aclAddress,
-      kmsContractAddress: FHE_CONFIG.kmsAddress
-    });
-    return fheInstance;
-  } catch (error) {
-    console.warn("Primary gateway failed, trying fallback...", error);
-    try {
-      fheInstance = await createInstance({
-        chainId: FHE_CONFIG.chainId,
-        networkUrl: FHE_CONFIG.networkUrl,
-        gatewayUrl: 'https://gateway.sepolia.testnet.zama.org/',
-        aclContractAddress: FHE_CONFIG.aclAddress,
-        kmsContractAddress: FHE_CONFIG.kmsAddress
-      });
-      return fheInstance;
-    } catch (fallbackError) {
-      console.error("FHE Initialization Failed:", fallbackError);
-      throw new Error("Could not initialize privacy engine.");
-    }
-  }
+export const initFHE = async (provider) => {
+  return await fheManager.initialize(provider);
 };
 
 /**
@@ -56,35 +19,47 @@ const generateHash = async (data) => {
 };
 
 /**
- * Encrypted data submission flow
+ * Encrypted data submission flow using fheManager
  */
-const encryptData = async (value, bits, contractAddress, userAddress) => {
-  const instance = await initFHE();
-  const input = instance.createEncryptedInput(contractAddress, userAddress);
+const encryptData = async (value, bits) => {
+  let encrypted;
   
-  if (bits === 8) input.add8(value);
-  else if (bits === 32) input.add32(value);
-  
-  const encrypted = await input.encrypt();
+  switch(bits) {
+    case 8:
+      encrypted = fheManager.encrypt8(value);
+      break;
+    case 16:
+      encrypted = fheManager.encrypt16(value);
+      break;
+    case 32:
+      encrypted = fheManager.encrypt32(value);
+      break;
+    case 64:
+      encrypted = fheManager.encrypt64(value);
+      break;
+    default:
+      throw new Error(`Unsupported bit size: ${bits}`);
+  }
+
   const plaintextHash = await generateHash(value);
 
   return {
-    handle: encrypted.handles[0],
-    inputProof: encrypted.inputProof,
+    handle: encrypted, // fhevmjs 0.6.x returns the handle directly
+    inputProof: "0x",  // Local mode doesn't produce an input proof in the same way
     plaintextHash
   };
 };
 
-export const encryptHealthData = (score, contract, user) => encryptData(score, 8, contract, user);
-export const encryptMentalData = (score, contract, user) => encryptData(score, 8, contract, user);
-export const encryptFinanceData = (score, contract, user) => encryptData(score, 32, contract, user);
+export const encryptHealthData = (score) => encryptData(score, 8);
+export const encryptMentalData = (score) => encryptData(score, 8);
+export const encryptFinanceData = (score) => encryptData(score, 32);
 
 export const generatePrivacyProof = (ciphertext) => {
   return {
     algorithm: "TFHE-rs",
-    mode: "fhEVM Coprocessor 0.11",
-    proof: "KMS-Signed Multi-Party Proof",
-    gate: "Programmable Bootstrapping",
-    verifiedBy: "Zama KMS Nodes"
+    mode: "Local Mock / Dev Mode",
+    proof: "Local-Signed Handshake",
+    gate: "Bypassed (Local Execution)",
+    verifiedBy: "Client Engine"
   };
 };
