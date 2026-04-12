@@ -22,7 +22,7 @@ export const initFHE = async () => {
     fheInstance = await createInstance({
       chainId: FHE_CONFIG.chainId,
       gatewayUrl: FHE_CONFIG.gatewayUrl,
-      aclAddress: FHE_CONFIG.aclAddress,
+      aclContractAddress: FHE_CONFIG.aclAddress, // Correct property name for newer fhevmjs
       kmsContractAddress: FHE_CONFIG.kmsContractAddress
     });
     return fheInstance;
