@@ -1,6 +1,7 @@
 import WalletButton from './WalletButton';
 import { Shield, Zap, ZapOff } from 'lucide-react';
 import { useDemo } from '../context/DemoContext';
+import { motion } from 'framer-motion';
 
 const Topbar = () => {
   const { isDemoMode, toggleDemoMode } = useDemo();
