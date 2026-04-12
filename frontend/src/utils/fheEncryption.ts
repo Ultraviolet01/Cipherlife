@@ -1,10 +1,16 @@
 // @ts-nocheck
-import { createInstance, SepoliaConfig } from '@zama-fhe/relayer-sdk';
+import { createInstance } from 'fhevmjs';
 
 // Configuration for Sepolia Zama Coprocessor (fhEVM v0.11.1)
-const RPC_URL = import.meta.env.VITE_SEPOLIA_RPC_URL || 'https://rpc.sepolia.org';
+const FHE_CONFIG = {
+  chainId: 11155111,
+  networkUrl: import.meta.env.VITE_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com',
+  gatewayUrl: 'https://gateway.sepolia.zama.ai/', // Ensure trailing slash
+  aclAddress: '0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D', 
+  kmsAddress: '0xbE0E383937d564D7FF0BC3b46c51f0bF8d5C311A' 
+};
 
-let fheInstance: any = null;
+let fheInstance = null;
 
 /**
  * Initializes the FHE Instance
@@ -14,20 +20,36 @@ export const initFHE = async () => {
   
   try {
     fheInstance = await createInstance({
-      ...SepoliaConfig,
-      network: RPC_URL,
+      chainId: FHE_CONFIG.chainId,
+      networkUrl: FHE_CONFIG.networkUrl,
+      gatewayUrl: FHE_CONFIG.gatewayUrl,
+      aclContractAddress: FHE_CONFIG.aclAddress,
+      kmsContractAddress: FHE_CONFIG.kmsAddress
     });
     return fheInstance;
-  } catch (error: any) {
-    console.error("FHE Initialization Failed:", error);
-    throw new Error("Could not initialize privacy engine. Please check your Sepolia connection.");
+  } catch (error) {
+    console.warn("Primary gateway failed, trying fallback...", error);
+    try {
+      // Fallback gateway
+      fheInstance = await createInstance({
+        chainId: FHE_CONFIG.chainId,
+        networkUrl: FHE_CONFIG.networkUrl,
+        gatewayUrl: 'https://gateway.sepolia.testnet.zama.org/',
+        aclContractAddress: FHE_CONFIG.aclAddress,
+        kmsContractAddress: FHE_CONFIG.kmsAddress
+      });
+      return fheInstance;
+    } catch (fallbackError) {
+      console.error("FHE Initialization Failed:", fallbackError);
+      throw new Error("Privacy engine unreachable. Service might be under maintenance.");
+    }
   }
 };
 
 /**
  * Helper to generate a SHA-256 hash of plaintext for the audit trail
  */
-const generateHash = async (data: any) => {
+const generateHash = async (data) => {
   const msgUint8 = new TextEncoder().encode(JSON.stringify(data));
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -37,7 +59,7 @@ const generateHash = async (data: any) => {
 /**
  * Encrypted data submission flow for v0.11.1
  */
-const encryptData = async (value: number, bits: number, contractAddress: string, userAddress: string) => {
+const encryptData = async (value, bits, contractAddress, userAddress) => {
   const instance = await initFHE();
   const input = instance.createEncryptedInput(contractAddress, userAddress);
   
@@ -47,18 +69,6 @@ const encryptData = async (value: number, bits: number, contractAddress: string,
   const encrypted = await input.encrypt();
   const plaintextHash = await generateHash(value);
 
-  // Store in audit cache
-  const auditLog = {
-    id: Date.now(),
-    timestamp: new Date().toLocaleTimeString(),
-    hash: plaintextHash,
-    ciphertext: encrypted.handles[0],
-    proof: encrypted.inputProof
-  };
-  
-  const existingLogs = JSON.parse(localStorage.getItem('cipherlife_audit_logs') || '[]');
-  localStorage.setItem('cipherlife_audit_logs', JSON.stringify([auditLog, ...existingLogs].slice(0, 50)));
-
   return {
     handle: encrypted.handles[0],
     inputProof: encrypted.inputProof,
@@ -66,22 +76,11 @@ const encryptData = async (value: number, bits: number, contractAddress: string,
   };
 };
 
-export const encryptHealthData = (score: number, contract: string, user: string) => {
-  return encryptData(score, 8, contract, user);
-};
+export const encryptHealthData = (score, contract, user) => encryptData(score, 8, contract, user);
+export const encryptMentalData = (score, contract, user) => encryptData(score, 8, contract, user);
+export const encryptFinanceData = (score, contract, user) => encryptData(score, 32, contract, user);
 
-export const encryptMentalData = (score: number, contract: string, user: string) => {
-  return encryptData(score, 8, contract, user);
-};
-
-export const encryptFinanceData = (score: number, contract: string, user: string) => {
-  return encryptData(score, 32, contract, user);
-};
-
-/**
- * Formats a privacy proof for the Vault dashboard
- */
-export const generatePrivacyProof = (ciphertext: string) => {
+export const generatePrivacyProof = (ciphertext) => {
   return {
     algorithm: "TFHE-rs",
     mode: "fhEVM Coprocessor 0.11",
