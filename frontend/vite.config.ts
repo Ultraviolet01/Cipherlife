@@ -4,7 +4,12 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  ssr: {
-    noExternal: ['framer-motion']
+  optimizeDeps: {
+    include: ['framer-motion']
+  },
+  build: {
+    commonjsOptions: {
+      include: [/framer-motion/]
+    }
   }
 })
