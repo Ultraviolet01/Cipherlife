@@ -21,3 +21,5 @@ build_error*.txt
 tsc_error*.txt
 vite_error*.txt
 verification_error*.txt
+
+.vercel

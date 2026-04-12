@@ -1,14 +1,7 @@
-// @ts-nocheck
-import { createInstance } from 'fhevmjs';
+import { createInstance, SepoliaConfig } from '@zama-fhe/relayer-sdk';
 
 // Configuration for Sepolia Zama Coprocessor (fhEVM v0.11.1)
-const FHE_CONFIG = {
-  chainId: 11155111,
-  networkUrl: 'https://rpc.sepolia.org',
-  gatewayUrl: 'https://gateway.sepolia.zama.ai', // Official Zama Sepolia Gateway
-  aclAddress: '0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D', // From ZamaConfig.sol
-  kmsContractAddress: '0xbE0E383937d564D7FF0BC3b46c51f0bF8d5C311A' // From ZamaConfig.sol
-};
+const RPC_URL = import.meta.env.VITE_SEPOLIA_RPC_URL || 'https://rpc.sepolia.org';
 
 let fheInstance = null;
 
@@ -20,11 +13,8 @@ export const initFHE = async () => {
   
   try {
     fheInstance = await createInstance({
-      chainId: FHE_CONFIG.chainId,
-      networkUrl: FHE_CONFIG.networkUrl, // Add this!
-      gatewayUrl: FHE_CONFIG.gatewayUrl,
-      aclContractAddress: FHE_CONFIG.aclAddress,
-      kmsContractAddress: FHE_CONFIG.kmsContractAddress
+      ...SepoliaConfig,
+      network: RPC_URL,
     });
     return fheInstance;
   } catch (error) {
