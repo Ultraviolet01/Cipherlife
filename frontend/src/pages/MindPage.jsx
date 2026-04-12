@@ -88,7 +88,7 @@ const MindPage = () => {
         encryptFn: encryptModule,
         decryptFn: decryptResult,
         contractFn: submitMental,
-        apiEndpoint: 'http://localhost:3001/analyze/mental',
+        apiEndpoint: '/analyze/mental',
         walletAccount: account,
         onComplete: (riskLevel) => {
           const riskLabels = ["Stable", "Emerging Stress", "Severe Burnout"];

@@ -6,7 +6,7 @@ import axios from 'axios';
  * Communicates with our secure backend proxy to protect API keys.
  */
 
-const API_BASE = 'http://localhost:3001/api/advisor';
+const API_BASE = '/api/advisor';
 
 export const getHealthInsights = async (healthScore, riskLevel) => {
   const response = await axios.post(API_BASE, {

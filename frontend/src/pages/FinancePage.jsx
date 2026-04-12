@@ -66,7 +66,7 @@ const FinancePage = () => {
         encryptFn: encryptModule,
         decryptFn: decryptResult,
         contractFn: submitFinance,
-        apiEndpoint: 'http://localhost:3001/analyze/finance',
+        apiEndpoint: '/analyze/finance',
         walletAccount: account,
         onComplete: (score) => {
           setScoreData({

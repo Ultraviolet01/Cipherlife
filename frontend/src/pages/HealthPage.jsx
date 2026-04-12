@@ -66,7 +66,7 @@ const HealthPage = () => {
         encryptFn: encryptModule,
         decryptFn: decryptResult,
         contractFn: submitHealth,
-        apiEndpoint: 'http://localhost:3001/analyze/health',
+        apiEndpoint: '/analyze/health',
         walletAccount: account,
         onComplete: (score) => {
           setResultScore(score);
