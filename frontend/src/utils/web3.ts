@@ -1,5 +1,5 @@
 // @ts-nocheck
-import vaultArtifact from './vault.ts';
+import vaultArtifact from './vault';
 
 export const SEPOLIA_CONFIG = {
   chainId: "0xaa36a7", // 11155111 in hex
