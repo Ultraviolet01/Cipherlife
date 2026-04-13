@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Loader2, Sparkles, MessageSquare, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
+import { useOpenAIAdvisor, askAdvisor } from '../utils/openaiAdvisor';
 import GlassCard from './GlassCard';
 
 const MAX_MESSAGES = 5;
@@ -29,24 +29,54 @@ const AIChat = ({ scores, patterns }) => {
   }, [messages, isLoading]);
 
   const handleSend = async () => {
-    if (!input.trim() || !canChat || isLoading) return;
-
-    const userMsg = input.trim();
-    setInput("");
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    if (!input.trim() || isLoading) return;
+    
+    const question = input.trim();
+    setInput('');
+    // setIsLoading is handled inside handleSend if we were using the hook's state, 
+    // but here AIChat seems to have its own isLoading or uses the hook's one.
+    // Let's stick to the user's provided logic.
+    
+    // Add user message
+    setMessages(prev => [...prev, { role: 'user', content: question }]);
 
     try {
-      const response = await getInsights(
-        'combined', 
-        scores.health, 
-        scores.mind, 
-        scores.finance, 
-        patterns,
-        userMsg
+      const response = await askAdvisor(
+        question,
+        scores.health || 0,
+        scores.mind || 0,
+        scores.finance || 0
       );
+      
       setMessages(prev => [...prev, { role: 'ai', content: response }]);
+      
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', content: "Advisor currently synchronizing. Please check your secure connection." }]);
+      console.error('Chat advisor error:', err);
+      
+      let errorMsg = '';
+      
+      if (err.message === 
+          'OPENAI_KEY_NOT_CONFIGURED' ||
+          err.message?.includes('API_KEY')) {
+        errorMsg = 
+          'AI advisor needs an OpenAI API key ' +
+          'to be configured. Check your Vercel ' +
+          'environment variables.';
+      } else if (err.message?.includes('429')) {
+        errorMsg = 
+          'Too many requests. Please wait ' +
+          'a moment before asking again.';
+      } else if (err.message?.includes('401')) {
+        errorMsg = 
+          'Invalid API key. Please check ' +
+          'your OpenAI configuration.';
+      } else {
+        errorMsg = 
+          'Could not get a response right now. ' +
+          'Please try again in a moment.';
+      }
+      
+      setMessages(prev => [...prev, { role: 'ai', content: errorMsg }]);
     }
   };
 

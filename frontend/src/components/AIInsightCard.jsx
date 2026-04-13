@@ -1,128 +1,254 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Sparkles, Activity, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useEffect, useState } 
+  from 'react';
 import ReactMarkdown from 'react-markdown';
-import GlassCard from './GlassCard';
+import { useOpenAIAdvisor } 
+  from '../utils/openaiAdvisor';
 
-const AIInsightCard = ({ insights, isLoading, module = 'combined', score, error, onRefresh }) => {
-  const getTheme = () => {
-    switch (module.toLowerCase()) {
-      case 'health': return { color: 'text-cipher-primary', border: 'border-cipher-primary/30', bg: 'bg-cipher-primary/10', shadow: 'shadow-cipher-primary/10' };
-      case 'mind': return { color: 'text-cipher-secondary', border: 'border-cipher-secondary/30', bg: 'bg-cipher-secondary/10', shadow: 'shadow-cipher-secondary/10' };
-      case 'finance': return { color: 'text-amber-400', border: 'border-amber-400/30', bg: 'bg-amber-400/10', shadow: 'shadow-amber-400/10' };
-      default: return { color: 'text-white', border: 'border-white/20', bg: 'bg-gradient-to-r from-cipher-primary/5 via-white/5 to-cipher-secondary/5', shadow: 'shadow-white/5' };
+export default function AIInsightCard({ 
+  module, scores, patterns 
+}) {
+  const { 
+    getInsights, isLoading, 
+    insights, error 
+  } = useOpenAIAdvisor();
+
+  // Auto-load on mount if scores exist
+  useEffect(() => {
+    const hasScores = scores && (
+      scores.health > 0 || 
+      scores.mind > 0 || 
+      scores.finance > 0
+    );
+    if (hasScores) {
+      getInsights(module, scores, patterns);
     }
-  };
+  }, [
+    scores?.health, 
+    scores?.mind, 
+    scores?.finance
+  ]);
 
-  const theme = getTheme();
-
-  return (
-    <GlassCard 
-      className={`relative border-t-2 ${theme.border} ${theme.shadow} overflow-hidden transition-all duration-500`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${theme.bg}`}>
-            <Sparkles className={`w-4 h-4 ${theme.color}`} />
-          </div>
+  // Loading state
+  if (isLoading) {
+    return (
+      <div style={{
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '16px',
+        padding: '24px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '16px'
+        }}>
+          <div className="spinner" />
           <div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">AI Wellness Advisor</h3>
-            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Privacy-First Strategic Analysis</p>
+            <div style={{ 
+              fontSize: '14px', 
+              fontWeight: 600,
+              color: '#F0F4FF'
+            }}>
+              AI Wellness Advisor
+            </div>
+            <div style={{ 
+              fontSize: '12px',
+              color: 'rgba(240,244,255,0.4)'
+            }}>
+              Analyzing your encrypted scores...
+            </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-          {score !== undefined && (
-            <div className={`px-3 py-1 rounded-full ${theme.bg} border ${theme.border} text-[10px] font-black uppercase`}>
-              <span className={theme.color}>{score}</span>/100
-            </div>
-          )}
-        </div>
+        {/* Shimmer skeleton */}
+        {[1,2,3].map(i => (
+          <div key={i} style={{
+            height: '14px',
+            background: 
+              'rgba(255,255,255,0.06)',
+            borderRadius: '7px',
+            marginBottom: '10px',
+            width: i === 3 ? '60%' : '100%',
+            animation: 
+              'shimmer 1.5s infinite'
+          }} />
+        ))}
       </div>
+    );
+  }
 
-      {/* Body / Loading / Error */}
-      <div className="min-h-[120px]">
-        {isLoading ? (
-          <div className="space-y-4 py-2">
-            <ShimmerLine width="w-full" delay={0} />
-            <ShimmerLine width="w-4/5" delay={0.2} />
-            <ShimmerLine width="w-5/6" delay={0.4} />
-            <div className="pt-4 flex items-center gap-2">
-              <RefreshCw className="w-3 h-3 text-slate-700 animate-spin" />
-              <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Analyzing your encrypted results...</span>
-            </div>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
-            <AlertCircle className="w-8 h-8 text-rose-500/50" />
-            <p className="text-[10px] text-rose-500/80 font-black uppercase tracking-widest leading-relaxed">
-              Strategic Advisor Offline: <br/> {error}
-            </p>
-            {onRefresh && (
-              <button 
-                onClick={onRefresh}
-                className="px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold uppercase hover:bg-white/10 transition-all"
-              >
-                Retry Analysis
-              </button>
+  // Error states with helpful messages
+  if (error) {
+    const errorMessages = {
+      API_KEY_MISSING: {
+        title: 'API Key Required',
+        body: 'Add your OpenAI API key to ' +
+          'Vercel environment variables ' +
+          '(OPENAI_API_KEY) to enable ' +
+          'AI wellness advice.',
+        action: null
+      },
+      INVALID_API_KEY: {
+        title: 'Invalid API Key',
+        body: 'The OpenAI API key is invalid. ' +
+          'Check it in your Vercel dashboard.',
+        action: null
+      },
+      RATE_LIMITED: {
+        title: 'Too Many Requests',
+        body: 'OpenAI rate limit reached. ' +
+          'Please wait a moment and try again.',
+        action: 'Try Again'
+      },
+      CONNECTION_FAILED: {
+        title: 'Advisor Unavailable',
+        body: 'Could not connect to the AI ' +
+          'advisor. Your scores are saved ' +
+          'and advice will be available ' +
+          'when connection is restored.',
+        action: 'Try Again'
+      }
+    };
+
+    const msg = errorMessages[error] 
+      || errorMessages.CONNECTION_FAILED;
+
+    return (
+      <div style={{
+        background: 'rgba(255,184,0,0.06)',
+        border: '1px solid rgba(255,184,0,0.2)',
+        borderRadius: '16px',
+        padding: '24px'
+      }}>
+        <div style={{ 
+          fontSize: '14px', 
+          fontWeight: 600,
+          color: '#FFB800',
+          marginBottom: '8px'
+        }}>
+          ⚡ {msg.title}
+        </div>
+        <div style={{ 
+          fontSize: '13px',
+          color: 'rgba(240,244,255,0.6)',
+          lineHeight: 1.5,
+          marginBottom: msg.action ? '16px' : 0
+        }}>
+          {msg.body}
+        </div>
+        {msg.action && (
+          <button
+            onClick={() => getInsights(
+              module, scores, patterns
             )}
-          </div>
-        ) : (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="prose prose-invert prose-xs max-w-none text-slate-300 leading-relaxed font-medium"
+            style={{
+              background: 
+                'rgba(0,212,255,0.1)',
+              border: 
+                '1px solid rgba(0,212,255,0.3)',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              color: '#00D4FF',
+              cursor: 'pointer',
+              fontSize: '13px'
+            }}
           >
-            <ReactMarkdown
-              components={{
-                p: ({node, ...props}) => <p className="mb-4 text-[11px]" {...props} />,
-                li: ({node, ...props}) => <li className="mb-2 text-[11px]" {...props} />,
-                strong: ({node, ...props}) => <strong className={`font-black uppercase tracking-wider ${theme.color}`} {...props} />,
-                h1: ({node, ...props}) => <h1 className="text-sm font-black uppercase mb-4" {...props} />,
-                h2: ({node, ...props}) => <h2 className="text-xs font-black uppercase mb-3" {...props} />,
-                h3: ({node, ...props}) => <h3 className="text-[11px] font-black uppercase mb-2" {...props} />,
-              }}
-            >
-              {insights || "Strategic advisor currently processing baseline metrics..."}
-            </ReactMarkdown>
-          </motion.div>
+            {msg.action}
+          </button>
         )}
       </div>
+    );
+  }
 
-      {/* Footer / Disclaimer */}
-      {!error && (
-        <div className="mt-8 pt-6 border-t border-white/5">
-          <div className="flex gap-3 p-4 rounded-xl bg-black/20 border-l-2 border-cipher-warning/40">
-             <AlertCircle className="w-4 h-4 text-cipher-warning/60 shrink-0 mt-0.5" />
-             <p className="text-[10px] text-slate-500 italic leading-relaxed">
-               Important: My recommendations are AI-generated for wellness awareness only. Always consult a qualified medical, mental health, or financial professional for specific concerns or treatments.
-             </p>
+  // No insights yet (scores are 0)
+  if (!insights) {
+    return (
+      <div style={{
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '16px',
+        padding: '24px',
+        textAlign: 'center',
+        color: 'rgba(240,244,255,0.4)',
+        fontSize: '14px'
+      }}>
+        Complete your health, mind, and 
+        finance check-ins to unlock 
+        AI wellness advice.
+      </div>
+    );
+  }
+
+  // Success — show insights
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.04)',
+      border: '1px solid rgba(0,212,255,0.15)',
+      borderRadius: '16px',
+      padding: '24px'
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '16px'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px' 
+        }}>
+          <span>✨</span>
+          <div>
+            <div style={{ 
+              fontSize: '14px', 
+              fontWeight: 600,
+              color: '#F0F4FF'
+            }}>
+              AI Wellness Advisor
+            </div>
+            <div style={{ 
+              fontSize: '11px',
+              color: 'rgba(240,244,255,0.4)'
+            }}>
+              Powered by GPT-4o
+            </div>
           </div>
-          
-          {onRefresh && !isLoading && (
-            <button 
-              onClick={onRefresh}
-              className="absolute bottom-4 right-4 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors group"
-            >
-              <RefreshCw className="w-3 h-3 text-slate-600 group-hover:text-white transition-colors" />
-            </button>
-          )}
         </div>
-      )}
-    </GlassCard>
+        <button
+          onClick={() => {
+            // Clear cache and reload
+            const cacheKey = 
+              `insights_${module}_` +
+              `${scores.health}_` +
+              `${scores.mind}_` +
+              `${scores.finance}`;
+            sessionStorage.removeItem(cacheKey);
+            getInsights(module, scores, patterns);
+          }}
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '6px',
+            padding: '4px 10px',
+            color: 'rgba(240,244,255,0.4)',
+            cursor: 'pointer',
+            fontSize: '11px'
+          }}
+        >
+          ↺ Refresh
+        </button>
+      </div>
+
+      {/* Insights content */}
+      <div style={{ 
+        fontSize: '14px',
+        lineHeight: 1.7,
+        color: 'rgba(240,244,255,0.85)'
+      }}>
+        <ReactMarkdown>{insights}</ReactMarkdown>
+      </div>
+    </div>
   );
-};
-
-const ShimmerLine = ({ width, delay }) => (
-  <div className={`h-2 ${width} bg-white/5 rounded-full overflow-hidden relative`}>
-    <motion.div
-      initial={{ x: '-100%' }}
-      animate={{ x: '100%' }}
-      transition={{ repeat: Infinity, duration: 1.5, delay }}
-      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-    />
-  </div>
-);
-
-export default AIInsightCard;
+}
