@@ -6,6 +6,7 @@ import {
   TrendingDown,
   DollarSign,
   PieChart,
+  Loader2,
 } from 'lucide-react';
 
 // Design System Components
