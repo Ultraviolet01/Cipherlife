@@ -15,7 +15,7 @@ import GlassCard from '../components/GlassCard';
 import WellnessRing from '../components/WellnessRing';
 import AlertCard from '../components/AlertCard';
 import { useCipherLifeContract } from '../hooks/useCipherLifeContract';
-import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
+import { useOpenAIAdvisor } from '../utils/openaiAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
 import { useDemo } from '../context/DemoContext';
 import AIChat from '../components/AIChat';
@@ -23,7 +23,7 @@ import AIChat from '../components/AIChat';
 const InsightsPage = () => {
   const { isDemoMode } = useDemo();
   const { contract } = useCipherLifeContract();
-  const { getInsights, isLoading: aiLoading, insights: aiInsights, error: aiError } = useOpenAIAdvisor();
+  const { getInsights } = useOpenAIAdvisor();
   const [mounted, setMounted] = useState(false);
   const [scores, setScores] = useState({
     health: 0,
@@ -66,7 +66,7 @@ const InsightsPage = () => {
   const hasNoData = unifiedScore === 0;
 
   const handleRefreshAdvisor = () => {
-    getInsights('combined', scores.health, scores.mind, scores.finance, "Recalculating baseline metrics");
+    getInsights('combined', scores, "Recalculating baseline metrics");
   };
 
   const container = {
@@ -155,11 +155,8 @@ const InsightsPage = () => {
           ) : (
             <AIInsightCard 
               module="combined"
-              score={unifiedScore}
-              insights={aiInsights.combined}
-              isLoading={aiLoading}
-              error={aiError}
-              onRefresh={handleRefreshAdvisor}
+              scores={scores}
+              patterns="Recalculating baseline metrics"
             />
           )}
 

@@ -14,7 +14,7 @@ import WellnessRing from '../components/WellnessRing';
 
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext';
-import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
+import { useOpenAIAdvisor } from '../utils/openaiAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
 import { callMLApi } from '../utils/mlApi';
 import { initFHEWhenReady, hashInputs, addToVaultLog } from '../utils/fheEncryption';
