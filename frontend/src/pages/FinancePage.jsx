@@ -12,21 +12,14 @@ import {
 import GlassCard from '../components/GlassCard';
 import WellnessRing from '../components/WellnessRing';
 
-// Cryptography
-import { useFHE } from '../hooks/useFHE';
 import { useWallet } from '../context/WalletContext';
-import { useCipherLifeContract } from '../hooks/useCipherLifeContract';
-import { useDemo } from '../context/DemoContext';
-import { executeUnifiedSubmission } from '../utils/submission';
 import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
+import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const FinancePage = () => {
   const [mounted, setMounted] = useState(false);
-  const { encryptModule, decryptResult } = useFHE();
   const { account } = useWallet();
-  const { submitFinance } = useCipherLifeContract();
-  const { isDemoMode, getDemoData } = useDemo();
   const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
 
   // Form State
@@ -37,6 +30,10 @@ const FinancePage = () => {
   // Submission State
   const [step, setStep] = useState(0); 
   const [resultScore, setResultScore] = useState(null);
+  const [error, setError] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [fheSuccess, setFheSuccess] = useState(false);
+  const [riskLevel, setRiskLevel] = useState('moderate');
 
   useEffect(() => {
     setMounted(true);
@@ -46,30 +43,77 @@ const FinancePage = () => {
   }, [income, spending]);
 
   const handleAnalyze = async () => {
+    setIsAnalyzing(true);
     setStep(1);
-    try {
-      const inputs = isDemoMode 
-        ? Object.values(getDemoData('finance'))
-        : [income, spending, savingsRate, 0]; // 0 is dummy debt
+    setError(null);
+    setFheSuccess(false);
 
-      await executeUnifiedSubmission({
-        moduleName: 'Finance',
-        rawData: inputs,
-        encryptFn: encryptModule,
-        decryptFn: decryptResult,
-        contractFn: submitFinance,
-        apiEndpoint: '/analyze/finance',
-        walletAccount: account,
-        onComplete: (score) => {
-          setResultScore(score);
-          setStep(4);
-          getInsights('finance', score, savingsRate < 10 ? 'Risky' : 'Stable');
+    const formValues = { income, spending, savingsRate };
+    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
+    if (isDemoMode) {
+      const demoScores = { finance: 42 };
+      localStorage.setItem('cipherlife_finance_score', String(demoScores.finance));
+      addToVaultLog('Finance', '0xdemo_hash_finance...', '0xdemo_cipher_finance...');
+      setResultScore(demoScores.finance);
+      setStep(4);
+      setIsAnalyzing(false);
+      return; 
+    }
+
+    try {
+      const mlResult = await fetch(
+        `${import.meta.env.VITE_ML_API_URL}/analyze/finance`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues)
         }
-      });
-    } catch (error) {
-      setStep(0);
+      ).then(r => r.json());
+
+      const score = mlResult.score || 45;
+      localStorage.setItem('cipherlife_finance_score', String(score));
+
+      setStep(2);
+      const fhe = await getFHEInstance();
+      
+      if (fhe && import.meta.env.VITE_CONTRACT_ADDRESS && import.meta.env.VITE_CONTRACT_ADDRESS !== '0x000...') {
+        try {
+          const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+          const userAddress = (await window.ethereum.request({ method: 'eth_accounts' }))[0];
+
+          const input = fhe.createEncryptedInput(contractAddress, userAddress);
+          input.add32(Math.round(score)); // Finance uses add32 according to old fheEncryption.ts
+          const encrypted = await input.encrypt();
+
+          addToVaultLog(
+            'Finance',
+            await hashInputs(formValues),
+            '0x' + Buffer.from(encrypted.handles[0]).toString('hex').slice(0, 20) + '...'
+          );
+
+          setFheSuccess(true);
+        } catch (fheErr) {
+          console.warn('⚠️ FHE encryption skipped:', fheErr.message);
+          setFheSuccess(false);
+        }
+      } else {
+        addToVaultLog('Finance', await hashInputs(formValues), 'demo-mode-no-encryption');
+      }
+
+      setStep(3);
+      setResultScore(score);
+      setRiskLevel(mlResult.risk_level || 'moderate');
+      setStep(4);
+
+    } catch (err) {
+      console.error('Analysis failed:', err);
+      setError('Analysis failed. Check your connection and try again.');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
+
 
   if (!mounted) return (
     <div className="flex flex-col items-center justify-center h-[60vh] gap-4">

@@ -1,9 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "public",
   "builds": [
-    { "src": "backend/index.js", "use": "@vercel/node" }
+    { "src": "backend/index.js", "use": "@vercel/node" },
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "public" } }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "backend/index.js" },

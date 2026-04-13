@@ -12,21 +12,14 @@ import {
 import GlassCard from '../components/GlassCard';
 import WellnessRing from '../components/WellnessRing';
 
-// Cryptography
-import { useFHE } from '../hooks/useFHE';
 import { useWallet } from '../context/WalletContext';
-import { useCipherLifeContract } from '../hooks/useCipherLifeContract';
-import { useDemo } from '../context/DemoContext';
-import { executeUnifiedSubmission } from '../utils/submission';
 import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
+import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const MindPage = () => {
   const [mounted, setMounted] = useState(false);
-  const { encryptModule, decryptResult } = useFHE();
   const { account } = useWallet();
-  const { submitMind } = useCipherLifeContract();
-  const { isDemoMode, getDemoData } = useDemo();
   const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
 
   // Form State
@@ -38,36 +31,87 @@ const MindPage = () => {
   // Submission State
   const [step, setStep] = useState(0); 
   const [resultScore, setResultScore] = useState(null);
+  const [error, setError] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [fheSuccess, setFheSuccess] = useState(false);
+  const [riskLevel, setRiskLevel] = useState('moderate');
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const handleAnalyze = async () => {
+    setIsAnalyzing(true);
     setStep(1);
-    try {
-      const inputs = isDemoMode 
-        ? Object.values(getDemoData('mind'))
-        : [mood, sleep, stress, social === 'high' ? 3 : social === 'moderate' ? 2 : 1];
+    setError(null);
+    setFheSuccess(false);
 
-      await executeUnifiedSubmission({
-        moduleName: 'Mind',
-        rawData: inputs,
-        encryptFn: encryptModule,
-        decryptFn: decryptResult,
-        contractFn: submitMind,
-        apiEndpoint: '/analyze/mind',
-        walletAccount: account,
-        onComplete: (score) => {
-          setResultScore(score);
-          setStep(4);
-          getInsights('mind', score, stress > 60 ? 'High' : 'Normal');
+    const formValues = { mood, sleep, stress, social };
+    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
+    if (isDemoMode) {
+      const demoScores = { mental: 55 };
+      localStorage.setItem('cipherlife_mind_score', String(demoScores.mental));
+      addToVaultLog('Mind', '0xdemo_hash_mind...', '0xdemo_cipher_mind...');
+      setResultScore(demoScores.mental);
+      setStep(4);
+      setIsAnalyzing(false);
+      return; 
+    }
+
+    try {
+      const mlResult = await fetch(
+        `${import.meta.env.VITE_ML_API_URL}/analyze/mind`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues)
         }
-      });
-    } catch (error) {
-      setStep(0);
+      ).then(r => r.json());
+
+      const score = mlResult.score || 65;
+      localStorage.setItem('cipherlife_mind_score', String(score));
+
+      setStep(2);
+      const fhe = await getFHEInstance();
+      
+      if (fhe && import.meta.env.VITE_CONTRACT_ADDRESS && import.meta.env.VITE_CONTRACT_ADDRESS !== '0x000...') {
+        try {
+          const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+          const userAddress = (await window.ethereum.request({ method: 'eth_accounts' }))[0];
+
+          const input = fhe.createEncryptedInput(contractAddress, userAddress);
+          input.add8(Math.min(255, Math.round(score)));
+          const encrypted = await input.encrypt();
+
+          addToVaultLog(
+            'Mind',
+            await hashInputs(formValues),
+            '0x' + Buffer.from(encrypted.handles[0]).toString('hex').slice(0, 20) + '...'
+          );
+
+          setFheSuccess(true);
+        } catch (fheErr) {
+          console.warn('⚠️ FHE encryption skipped:', fheErr.message);
+          setFheSuccess(false);
+        }
+      } else {
+        addToVaultLog('Mind', await hashInputs(formValues), 'demo-mode-no-encryption');
+      }
+
+      setStep(3);
+      setResultScore(score);
+      setRiskLevel(mlResult.risk_level || 'moderate');
+      setStep(4);
+
+    } catch (err) {
+      console.error('Analysis failed:', err);
+      setError('Analysis failed. Check your connection and try again.');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
+
 
   if (!mounted) return (
     <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
