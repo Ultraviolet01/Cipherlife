@@ -158,8 +158,9 @@ Give financial wellness suggestions.`;
     });
   }
 
+  let response;
   try {
-    const response = await fetch(
+    response = await fetch(
       'https://api.openai.com/v1/chat/completions',
       {
         method: 'POST',
@@ -181,6 +182,33 @@ Give financial wellness suggestions.`;
     if (!response.ok) {
       const errData = await response.json();
       console.error('OpenAI error:', errData);
+
+      // Check for quota or 402 errors for fallback
+      if (response.status === 402 || 
+          errData.error?.message?.toLowerCase().includes('quota') ||
+          errData.error?.code === 'insufficient_quota') {
+        
+        const h = scores.health || 0;
+        const m = scores.mind || 0;
+        const f = scores.finance || 0;
+        
+        const fallback = `
+🫀 **Health** — Your health score of ${h}/100 suggests focusing on consistent sleep, hydration, and light daily movement. Even 20 minutes of walking significantly improves biomarkers.
+
+🧠 **Mind** — Your mind score of ${m}/100 indicates stress management should be a priority. Try box breathing (4-4-4-4) and limit screen time before bed.
+
+💰 **Finance** — Your finance score of ${f}/100 suggests building a small emergency buffer first before focusing on long-term investments.
+
+⭐ **Priority Action** — Start with one small habit this week: a 10-minute evening walk. It improves all three domains simultaneously.
+
+---
+⚕️ Medical Disclaimer: AI-generated for informational purposes only. Consult qualified medical professionals.
+💼 Financial Disclaimer: General guidance only. Consult a certified financial advisor.
+        `;
+        
+        return res.status(200).json({ insight: fallback });
+      }
+
       return res.status(response.status).json({
         error: 'OPENAI_ERROR',
         message: errData.error?.message 
@@ -203,6 +231,35 @@ Give financial wellness suggestions.`;
 
   } catch (err) {
     console.error('Advisor API error:', err);
+
+    if (err.message?.includes('402') || 
+        err.message?.includes('quota') ||
+        response?.status === 402) {
+      
+      // Return pre-written advice based on scores
+      const h = scores.health || 0;
+      const m = scores.mind || 0;
+      const f = scores.finance || 0;
+      
+      const fallback = `
+🫀 **Health** — Your health score of ${h}/100 suggests focusing on consistent sleep, hydration, and light daily movement. Even 20 minutes of walking significantly improves biomarkers.
+
+🧠 **Mind** — Your mind score of ${m}/100 indicates stress management should be a priority. Try box breathing (4-4-4-4) and limit screen time before bed.
+
+💰 **Finance** — Your finance score of ${f}/100 suggests building a small emergency buffer first before focusing on long-term investments.
+
+⭐ **Priority Action** — Start with one small habit this week: a 10-minute evening walk. It improves all three domains simultaneously.
+
+---
+⚕️ Medical Disclaimer: AI-generated for informational purposes only. Consult qualified medical professionals.
+💼 Financial Disclaimer: General guidance only. Consult a certified financial advisor.
+      `;
+      
+      return res.status(200).json({ 
+        insight: fallback 
+      });
+    }
+
     return res.status(500).json({ 
       error: 'SERVER_ERROR',
       message: err.message 
