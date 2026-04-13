@@ -39,7 +39,10 @@ app.post('/api/advisor', async (req, res) => {
 
   if (!apiKey) {
     console.warn("⚠️ AI Advisor: Strategic guidance disabled. Missing OPENAI_API_KEY in backend/.env");
-    return res.status(503).json({ error: "AI Advisor is missing configuration on the server." });
+    return res.status(500).json({ 
+      error: 'API_KEY_MISSING',
+      message: 'AI Advisor is missing configuration on the server.'
+    });
   }
 
   const openai = new OpenAI({ apiKey });
@@ -82,9 +85,51 @@ app.post('/api/advisor', async (req, res) => {
       max_tokens: 1000,
     });
 
-    res.json({ content: response.choices[0].message.content });
+    res.json({ insight: response.choices[0].message.content });
   } catch (error) {
     console.error("OpenAI API Error:", error.message);
+
+    if (error.message?.includes('402') || 
+        error.message?.includes('quota') ||
+        error.status === 402) {
+      
+      const h = scores.health || 0;
+      const m = scores.mind || scores.mindScore || 0;
+      const f = scores.finance || scores.financeScore || 0;
+      
+      const fallback = `
+🫀 **Health** — Your health score of 
+${h}/100 suggests focusing on consistent 
+sleep, hydration, and light daily movement. 
+Even 20 minutes of walking significantly 
+improves biomarkers.
+
+🧠 **Mind** — Your mind score of ${m}/100 
+indicates stress management should be a 
+priority. Try box breathing (4-4-4-4) 
+and limit screen time before bed.
+
+💰 **Finance** — Your finance score of 
+${f}/100 suggests building a small 
+emergency buffer first before focusing 
+on long-term investments.
+
+⭐ **Priority Action** — Start with one 
+small habit this week: a 10-minute 
+evening walk. It improves all three 
+domains simultaneously.
+
+---
+⚕️ Medical Disclaimer: AI-generated for 
+informational purposes only. Consult 
+qualified medical professionals.
+💼 Financial Disclaimer: General guidance 
+only. Consult a certified financial advisor.
+      `;
+      
+      return res.status(200).json({ insight: fallback });
+    }
+
     res.status(500).json({ error: "Strategic advisor offline. Please try again later." });
   }
 });
