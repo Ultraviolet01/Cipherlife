@@ -1,5 +1,4 @@
-// Safe ML API call with timeout + fallback
-const ML_API = import.meta.env.VITE_ML_API_URL 
+const ML_API = (import.meta.env.VITE_ML_API_URL || '').replace(/\/$/, '') 
   || 'http://localhost:8001';
 
 // Timeout wrapper
@@ -88,20 +87,22 @@ export async function callMLApi(
       8000 // 8 second timeout
     );
 
-    if (!res.ok) {
+    // Robust check: must be OK status AND JSON content type
+    const contentType = res.headers.get('content-type');
+    if (!res.ok || !contentType || !contentType.includes('application/json')) {
       throw new Error(
-        `API error: ${res.status}`
+        `API unavailable or invalid response (${res.status})`
       );
     }
 
     return await res.json();
 
   } catch (err) {
-    // If API is offline or times out,
+    // If API is offline, times out, or returns 404 HTML,
     // compute score locally instead
     console.warn(
-      `ML API unavailable (${err.message}),` +
-      ` using local computation`
+      `ML API offline/invalid (${err.message}). ` +
+      `Switched to Secure Local Assessment.`
     );
     return getFallbackScore(module, inputs);
   }
