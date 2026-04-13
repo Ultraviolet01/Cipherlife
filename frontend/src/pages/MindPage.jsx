@@ -485,6 +485,3 @@ const MindPage = () => {
 };
 
 export default MindPage;
-};
-
-export default MindPage;
