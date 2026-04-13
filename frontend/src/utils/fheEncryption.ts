@@ -1,3 +1,7 @@
+let fheInstance = null;
+let fheInitPromise = null;
+let fheInitError = null;
+
 // Lazy init: only started when explicitly called
 export async function initFHEWhenReady() {
   if (fheInitPromise) return fheInitPromise;
