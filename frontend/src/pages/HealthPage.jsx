@@ -17,7 +17,7 @@ import { useWallet } from '../context/WalletContext';
 import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
 import { callMLApi } from '../utils/mlApi';
-import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
+import { initFHEWhenReady, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const HealthPage = () => {
   const [mounted, setMounted] = useState(false);
@@ -69,9 +69,9 @@ const HealthPage = () => {
         vitals_anomaly_score: vitalsAnomaly
       };
 
-      // STEP 1: Call ML API 
-      // (with fallback if offline)
+      // STEP 1: Lazy Init FHE (Triggered by user click)
       setStep('encrypting');
+      await initFHEWhenReady();
       await new Promise(r => setTimeout(r, 800));
       
       setStep('analyzing');

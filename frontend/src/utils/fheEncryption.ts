@@ -1,60 +1,44 @@
-import { Buffer } from 'buffer';
+// Lazy init: only started when explicitly called
+export async function initFHEWhenReady() {
+  if (fheInitPromise) return fheInitPromise;
+  
+  fheInitPromise = (async () => {
+    try {
+      if (typeof window === 'undefined' || !window.ethereum) {
+        console.warn('FHE: MetaMask not found');
+        return null;
+      }
 
-// Start initializing immediately
-// when the module is imported
-let fheInstance = null;
-let fheInitPromise = null;
-let fheInitError = null;
+      const { createInstance } = await import('@zama-fhe/relayer-sdk/web');
+      fheInstance = await createInstance({
+        chainId: 11155111,
+        network: window.ethereum,
+        aclContractAddress: '0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D',
+        kmsContractAddress: '0xbE0E383937d564D7FF0BC3b46c51f0bF8d5C311A',
+        inputVerifierContractAddress: '0xBBC1fFCdc7C316aAAd72E807D9b0272BE8F84DA0',
+      });
 
-// Auto-start init as soon as module loads
-async function startFHEInit() {
-  try {
-    // Only init if MetaMask is available
-    if (typeof window === 'undefined' || !window.ethereum) {
-      console.warn(
-        'FHE: MetaMask not found, ' +
-        'skipping FHE init'
-      );
+      console.log('✅ FHE initialized successfully');
+      return fheInstance;
+    } catch (err) {
+      fheInitError = err;
+      console.warn('⚠️ FHE init failed:', err.message);
       return null;
     }
+  })();
 
-    const { createInstance } = await import('@zama-fhe/relayer-sdk/web');
-
-    fheInstance = await createInstance({
-      chainId: 11155111,
-      network: window.ethereum,
-      aclContractAddress: '0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D',
-      kmsContractAddress: '0xbE0E383937d564D7FF0BC3b46c51f0bF8d5C311A',
-      inputVerifierContractAddress: '0xBBC1fFCdc7C316aAAd72E807D9b0272BE8F84DA0',
-    });
-
-    console.log('✅ FHE initialized successfully');
-    return fheInstance;
-  } catch (err) {
-    fheInitError = err;
-    console.warn(
-      '⚠️ FHE init failed (non-fatal):', 
-      err.message
-    );
-    return null;
-  }
+  return fheInitPromise;
 }
 
-// Start immediately on module load
-if (typeof window !== 'undefined') {
-  fheInitPromise = startFHEInit();
-}
-
-// Export safe getter
+// Export safe getter (waits for lazy init if already started)
 export async function getFHEInstance() {
   if (fheInstance) return fheInstance;
-  // Wait for the already-started promise
-  if (fheInitPromise) await fheInitPromise;
-  return fheInstance; // may still be null
+  if (!fheInitPromise) return null; // Didn't start yet
+  return fheInitPromise;
 }
 
 export async function initFHE() {
-  return getFHEInstance();
+  return initFHEWhenReady();
 }
 
 export function isFHEReady() {

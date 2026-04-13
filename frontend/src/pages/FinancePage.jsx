@@ -15,13 +15,11 @@ import WellnessRing from '../components/WellnessRing';
 
 import { useNavigate } from 'react-router-dom';
 import { callMLApi } from '../utils/mlApi';
-import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
+import { initFHEWhenReady, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const FinancePage = () => {
   const [mounted, setMounted] = useState(false);
-  const { account } = useWallet();
   const navigate = useNavigate();
-  const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
 
   // Form State
   const [netIncome, setNetIncome] = useState(5000);
@@ -67,6 +65,7 @@ const FinancePage = () => {
       };
 
       setStep('encrypting');
+      await initFHEWhenReady();
       await new Promise(r => setTimeout(r, 800));
       
       setStep('analyzing');
@@ -478,7 +477,7 @@ const FinancePage = () => {
                   paddingTop: '8px'
                 }}>
                   <button
-                    onClick={() => navigate('/insights')}
+                    onClick={() => navigate('/dashboard')}
                     style={{
                       background: 'rgba(0,212,255,0.15)',
                       border: '1px solid rgba(0,212,255,0.4)',

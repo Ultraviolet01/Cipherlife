@@ -14,13 +14,11 @@ import WellnessRing from '../components/WellnessRing';
 
 import { useNavigate } from 'react-router-dom';
 import { callMLApi } from '../utils/mlApi';
-import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
+import { initFHEWhenReady, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const MindPage = () => {
   const [mounted, setMounted] = useState(false);
-  const { account } = useWallet();
   const navigate = useNavigate();
-  const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
 
   // Form State
   const [moodScore, setMoodScore] = useState(5);
@@ -57,6 +55,7 @@ const MindPage = () => {
       };
 
       setStep('blinding');
+      await initFHEWhenReady();
       await new Promise(r => setTimeout(r, 800));
       
       setStep('analyzing');
