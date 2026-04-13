@@ -12,103 +12,100 @@ import {
 import GlassCard from '../components/GlassCard';
 import WellnessRing from '../components/WellnessRing';
 
-import { useWallet } from '../context/WalletContext';
-import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
-import AIInsightCard from '../components/AIInsightCard';
+import { useNavigate } from 'react-router-dom';
+import { callMLApi } from '../utils/mlApi';
 import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const MindPage = () => {
   const [mounted, setMounted] = useState(false);
   const { account } = useWallet();
+  const navigate = useNavigate();
   const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
 
   // Form State
-  const [mood, setMood] = useState(5);
-  const [sleep, setSleep] = useState(7);
-  const [stress, setStress] = useState(40);
-  const [social, setSocial] = useState('moderate');
+  const [moodScore, setMoodScore] = useState(5);
+  const [sleepHours, setSleepHours] = useState(7);
+  const [stressLevel, setStressLevel] = useState(40);
+  const [socialScore, setSocialScore] = useState(50);
   
   // Submission State
-  const [step, setStep] = useState(0); 
-  const [resultScore, setResultScore] = useState(null);
-  const [error, setError] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [fheSuccess, setFheSuccess] = useState(false);
-  const [riskLevel, setRiskLevel] = useState('moderate');
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [step, setStep] = useState(null);
+  const [score, setScore] = useState(null);
+  const [burnoutRisk, setBurnoutRisk] = useState('none');
+  const [error, setError] = useState(null);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const handleAnalyze = async () => {
+  const handleSubmit = async () => {
+    if (isAnalyzing) return;
+    
     setIsAnalyzing(true);
-    setStep(1);
+    setAnalysisComplete(false);
     setError(null);
-    setFheSuccess(false);
-
-    const formValues = { mood, sleep, stress, social };
-    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
-
-    if (isDemoMode) {
-      const demoScores = { mental: 55 };
-      localStorage.setItem('cipherlife_mind_score', String(demoScores.mental));
-      addToVaultLog('Mind', '0xdemo_hash_mind...', '0xdemo_cipher_mind...');
-      setResultScore(demoScores.mental);
-      setStep(4);
-      setIsAnalyzing(false);
-      return; 
-    }
 
     try {
-      const mlResult = await fetch(
-        `${import.meta.env.VITE_ML_API_URL}/analyze/mind`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formValues)
-        }
-      ).then(r => r.json());
+      const inputs = {
+        mood_score: moodScore,
+        sleep_score: sleepHours,
+        stress_score: stressLevel,
+        social_score: socialScore
+      };
 
-      const score = mlResult.score || 65;
-      localStorage.setItem('cipherlife_mind_score', String(score));
-
-      setStep(2);
-      const fhe = await getFHEInstance();
+      setStep('blinding');
+      await new Promise(r => setTimeout(r, 800));
       
-      if (fhe && import.meta.env.VITE_CONTRACT_ADDRESS && import.meta.env.VITE_CONTRACT_ADDRESS !== '0x000...') {
-        try {
-          const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-          const userAddress = (await window.ethereum.request({ method: 'eth_accounts' }))[0];
+      setStep('analyzing');
+      const result = await callMLApi(
+        'mental', inputs
+      );
 
-          const input = fhe.createEncryptedInput(contractAddress, userAddress);
-          input.add8(Math.min(255, Math.round(score)));
-          const encrypted = await input.encrypt();
+      setStep('decrypting');
+      await new Promise(r => setTimeout(r, 600));
 
-          addToVaultLog(
-            'Mind',
-            await hashInputs(formValues),
-            '0x' + Buffer.from(encrypted.handles[0]).toString('hex').slice(0, 20) + '...'
-          );
+      const resultScore = result.score ??
+        (result.burnout_risk === 'severe' ? 80
+         : result.burnout_risk === 'mild' ? 50
+         : 20);
 
-          setFheSuccess(true);
-        } catch (fheErr) {
-          console.warn('⚠️ FHE encryption skipped:', fheErr.message);
-          setFheSuccess(false);
-        }
-      } else {
-        addToVaultLog('Mind', await hashInputs(formValues), 'demo-mode-no-encryption');
+      localStorage.setItem(
+        'cipherlife_mind_score',
+        String(resultScore)
+      );
+      localStorage.setItem(
+        'cipherlife_burnout_risk',
+        result.burnout_risk || 'none'
+      );
+
+      try {
+        const inputHash = await hashInputs(inputs);
+        addToVaultLog(
+          'Mind',
+          inputHash,
+          result.offline_mode
+            ? '0xlocal_computed'
+            : '0x' + Math.random()
+                .toString(16).slice(2, 22) + '...'
+        );
+      } catch (e) {
+        console.warn('Vault log failed:', e);
       }
 
-      setStep(3);
-      setResultScore(score);
-      setRiskLevel(mlResult.risk_level || 'moderate');
-      setStep(4);
+      setScore(resultScore);
+      setBurnoutRisk(result.burnout_risk || 'none');
+      setIsOfflineMode(!!result.offline_mode);
+      setAnalysisComplete(true);
 
     } catch (err) {
-      console.error('Analysis failed:', err);
-      setError('Analysis failed. Check your connection and try again.');
+      console.error('Mind submit failed:', err);
+      setError('Check-in failed. Please try again.');
     } finally {
       setIsAnalyzing(false);
+      setStep(null);
     }
   };
 
@@ -177,12 +174,12 @@ const MindPage = () => {
                   </label>
                   <div className="flex justify-between items-center text-slate-500 text-[10px] font-bold">
                     <span>LOW</span>
-                    <span className="text-cipher-secondary text-lg font-black">{mood}</span>
+                    <span className="text-cipher-secondary text-lg font-black">{moodScore}</span>
                     <span>HIGH</span>
                   </div>
                   <input 
-                    type="range" min="1" max="10" value={mood} 
-                    onChange={(e) => setMood(parseInt(e.target.value))}
+                    type="range" min="1" max="10" value={moodScore} 
+                    onChange={(e) => setMoodScore(parseInt(e.target.value))}
                     className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-cipher-secondary"
                   />
                 </div>
@@ -194,18 +191,18 @@ const MindPage = () => {
                   </label>
                   <div className="flex justify-between items-center text-slate-500 text-[10px] font-bold">
                     <span>4H</span>
-                    <span className="text-cipher-secondary text-lg font-black">{sleep}H</span>
+                    <span className="text-cipher-secondary text-lg font-black">{sleepHours}H</span>
                     <span>12H</span>
                   </div>
                   <input 
-                    type="range" min="4" max="12" value={sleep} 
-                    onChange={(e) => setSleep(parseInt(e.target.value))}
+                    type="range" min="4" max="12" value={sleepHours} 
+                    onChange={(e) => setSleepHours(parseInt(e.target.value))}
                     className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-cipher-secondary"
                   />
                 </div>
               </div>
 
-              {/* Stress Vertical Slider */}
+              {/* Stress Gauge */}
               <div className="flex flex-col items-center gap-4 bg-white/5 p-6 rounded-2xl border border-white/5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-4">Stress Gauge</label>
                 <div className="flex flex-col items-center gap-3">
@@ -213,14 +210,14 @@ const MindPage = () => {
                   <input 
                     type="range"
                     min="0" max="100"
-                    value={stress}
-                    onChange={e => setStress(parseInt(e.target.value))}
+                    value={stressLevel}
+                    onChange={e => setStressLevel(parseInt(e.target.value))}
                     style={{
                       writingMode: 'vertical-lr',
                       direction: 'rtl',
                       height: '140px',
                       width: '8px',
-                      accentColor: stress > 60 ? '#FF3366' : stress > 30 ? '#FFB800' : '#00FF88'
+                      accentColor: stressLevel > 60 ? '#FF3366' : stressLevel > 30 ? '#FFB800' : '#00FF88'
                     }}
                     className="cursor-pointer"
                   />
@@ -228,42 +225,52 @@ const MindPage = () => {
                   <div style={{ 
                     fontSize: '24px', 
                     fontWeight: '800',
-                    color: stress > 60 ? '#FF3366' : stress > 30 ? '#FFB800' : '#00FF88',
+                    color: stressLevel > 60 ? '#FF3366' : stressLevel > 30 ? '#FFB800' : '#00FF88',
                     marginTop: '8px'
                   }}>
-                    {stress}
+                    {stressLevel}
                   </div>
                 </div>
               </div>
             </div>
 
             <button
-              onClick={handleAnalyze}
-              disabled={step > 0}
+              onClick={handleSubmit}
+              disabled={isAnalyzing}
               style={{
-                background: step > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #7B2FFF, #5B1FBF)',
+                background: isAnalyzing ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #7B2FFF, #5B1FBF)',
                 color: 'white',
                 fontWeight: '700',
                 border: 'none',
                 borderRadius: '12px',
                 padding: '14px 24px',
                 fontSize: '15px',
-                cursor: step > 0 ? 'not-allowed' : 'pointer',
+                opacity: isAnalyzing ? 0.7 : 1,
+                cursor: isAnalyzing ? 'not-allowed' : 'pointer',
                 width: '100%',
                 marginTop: '32px',
                 transition: 'opacity 0.2s, transform 0.1s'
               }}
               className="hover:opacity-90 active:scale-[0.98]"
             >
-              Encrypt & Check In
+              {isAnalyzing
+                ? step === 'blinding'
+                  ? '🔐 Blinding...'
+                  : step === 'analyzing'
+                  ? '⚡ Analyzing...'
+                  : step === 'decrypting'
+                  ? '🔓 Finalizing...'
+                  : 'Processing...'
+                : 'Encrypt & Check In'
+              }
             </button>
           </GlassCard>
         </div>
 
-        {/* Data Preview */}
+        {/* Status / Output Panel */}
         <div className="space-y-6">
           <GlassCard className="p-6 h-full min-h-[400px]">
-            {step === 0 && (
+            {!isAnalyzing && !analysisComplete && (
               <div className="space-y-6 h-full flex flex-col">
                 <div className="flex items-center gap-2">
                   <Zap className="w-5 h-5 text-cipher-secondary" />
@@ -284,9 +291,9 @@ const MindPage = () => {
                   </div>
                   
                   <div className="space-y-3">
-                    <div style={{ color: '#FF6B6B' }}>mood: {mood} <span className="text-slate-700 ml-4">← sensitive data</span></div>
-                    <div style={{ color: '#FF6B6B' }}>sleep: {sleep}h</div>
-                    <div style={{ color: '#FF6B6B' }}>stress: {stress}</div>
+                    <div style={{ color: '#FF6B6B' }}>mood: {moodScore} <span className="text-slate-700 ml-4">← sensitive data</span></div>
+                    <div style={{ color: '#FF6B6B' }}>sleep: {sleepHours}h</div>
+                    <div style={{ color: '#FF6B6B' }}>stress: {stressLevel}</div>
                     
                     <div style={{ color: '#475569', fontStyle: 'italic', marginTop: '20px', borderTop: '1px solid #ffffff10', paddingTop: '10px' }}>
                       Ready for homomorphic conversion...
@@ -296,39 +303,188 @@ const MindPage = () => {
               </div>
             )}
 
-            {step > 0 && step < 4 && (
-              <div className="h-full flex flex-col justify-center items-center text-center py-20">
-                 <div className="w-16 h-16 rounded-full border-4 border-cipher-secondary/20 border-t-cipher-secondary animate-spin mb-6" />
-                 <h4 className="text-xl font-bold mb-2">Blinding Active</h4>
-                 <p className="text-slate-500 text-sm max-w-xs">Your data is being mathematically isolated from all systemic observers.</p>
+            {isAnalyzing && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '16px'
+              }}>
+                <div style={{ color: '#00FF88', marginBottom: '16px', fontSize: '11px', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                  // CIPHERTEXT GENERATION ACTIVE
+                </div>
+                {[
+                  { 
+                    key: 'blinding', 
+                    label: 'Encrypting locally...' 
+                  },
+                  { 
+                    key: 'analyzing', 
+                    label: 'Running FHE analysis...' 
+                  },
+                  { 
+                    key: 'decrypting', 
+                    label: 'Decrypting result...' 
+                  }
+                ].map((s, i) => {
+                  const steps = [
+                    'blinding','analyzing','decrypting'
+                  ];
+                  const currentIdx = 
+                    steps.indexOf(step);
+                  const thisIdx = steps.indexOf(s.key);
+                  const isDone = thisIdx < currentIdx;
+                  const isActive = thisIdx === currentIdx;
+                  
+                  return (
+                    <div key={s.key} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      opacity: thisIdx > currentIdx 
+                        ? 0.3 : 1
+                    }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: isDone 
+                          ? '#00FF88'
+                          : 'transparent',
+                        border: isDone 
+                          ? 'none'
+                          : isActive
+                          ? '2px solid #7B2FFF'
+                          : '2px solid rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        animation: isActive 
+                          ? 'spin 0.8s linear infinite' 
+                          : 'none'
+                      }}>
+                        {isDone && (
+                          <span style={{ fontSize: '12px', color: '#0A0F1E', fontWeight: 'bold' }}>✓</span>
+                        )}
+                        {isActive && (
+                          <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: '#7B2FFF'
+                          }} />
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '13px',
+                        color: isDone 
+                          ? '#00FF88'
+                          : isActive 
+                          ? '#7B2FFF'
+                          : 'rgba(255,255,255,0.3)',
+                        fontWeight: isActive ? 600 : 400
+                      }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {step === 4 && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center justify-center h-full gap-8 py-6"
-              >
-                <div className="text-center">
-                   <WellnessRing score={resultScore} size={150} color="#7B2FFF" />
-                   <div className="mt-4 text-2xl font-black text-cipher-secondary">MIND SCORE: {resultScore}</div>
+            {analysisComplete && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+                animation: 'fadeIn 0.5s ease'
+              }}>
+                <div style={{ 
+                  textAlign: 'center',
+                  padding: '24px 0'
+                }}>
+                  <WellnessRing 
+                    score={score} 
+                    size={100}
+                    label={burnoutRisk}
+                    color="#7B2FFF"
+                  />
                 </div>
-                <AIInsightCard 
-                  module="mind"
-                  score={resultScore}
-                  insights={insights.mind}
-                  isLoading={aiLoading}
-                  error={aiError}
-                  onRefresh={() => getInsights('mind', resultScore, stress > 60 ? 'High' : 'Normal')}
-                />
-              </motion.div>
+
+                <div style={{
+                  background: score < 40 
+                    ? 'rgba(0,255,136,0.1)'
+                    : score < 70
+                    ? 'rgba(255,184,0,0.1)'
+                    : 'rgba(255,51,102,0.1)',
+                  border: `1px solid ${
+                    score < 40 ? '#00FF88'
+                    : score < 70 ? '#FFB800'
+                    : '#FF3366'
+                  }`,
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  textAlign: 'center',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: score < 40 
+                    ? '#00FF88'
+                    : score < 70 
+                    ? '#FFB800'
+                    : '#FF3366'
+                }}>
+                  {burnoutRisk === 'none'
+                    ? '✓ No burnout detected'
+                    : burnoutRisk === 'mild'
+                    ? '⚡ Mild burnout risk — Take breaks'
+                    : '⚠️ Severe burnout — Seek support'}
+                </div>
+
+                {isOfflineMode && (
+                  <div style={{
+                    fontSize: '11px',
+                    color: 'rgba(255,184,0,0.7)',
+                    textAlign: 'center',
+                    padding: '8px',
+                    background: 'rgba(255,184,0,0.05)',
+                    borderRadius: '8px'
+                  }}>
+                    ⚡ Computed locally 
+                    (ML server offline)
+                  </div>
+                )}
+
+                <div style={{
+                  textAlign: 'center',
+                  paddingTop: '8px'
+                }}>
+                  <button
+                    onClick={() => navigate('/finance')}
+                    style={{
+                      background: 'rgba(255,184,0,0.15)',
+                      border: '1px solid rgba(255,184,0,0.4)',
+                      borderRadius: '10px',
+                      padding: '10px 20px',
+                      color: '#FFB800',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600
+                    }}
+                  >
+                    Next: Finance Check-in →
+                  </button>
+                </div>
+              </div>
             )}
           </GlassCard>
         </div>
       </div>
     </div>
   );
+};
+
+export default MindPage;
 };
 
 export default MindPage;

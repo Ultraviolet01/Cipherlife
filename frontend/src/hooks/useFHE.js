@@ -9,34 +9,43 @@ export const useFHE = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const startup = async () => {
-      // If we don't have a provider yet and window.ethereum is missing, we can't initialize
-      if (!provider && !window.ethereum) {
-        setLoadingMsg('Waiting for wallet connection...');
-        return;
-      }
+    let interval;
+    let attempts = 0;
 
-      try {
-        setLoadingMsg('Verifying cryptographic identity...');
-        
-        // Use the active provider or fallout to window.ethereum if provider is null
-        const activeProvider = provider || (window.ethereum ? new (await import('ethers')).ethers.BrowserProvider(window.ethereum) : null);
-        
-        if (!activeProvider) {
-            throw new Error("No provider available for cryptographic initialization.");
-        }
-
-        await fheUtils.initFHE(activeProvider);
-        setLoadingMsg('Privacy engine operational.');
+    const checkReadiness = () => {
+      attempts++;
+      if (fheUtils.isFHEReady()) {
         setFheReady(true);
-      } catch (err) {
-        setError('Privacy engine failure. Please ensure your network supports FHE.');
-        console.error("FHE Startup Error:", err);
+        setLoadingMsg('Privacy engine operational.');
+        setError(null);
+        if (interval) clearInterval(interval);
+      } else {
+        const currentError = fheUtils.getFHEError();
+        if (currentError) {
+          setError(currentError.message || 'Privacy engine failure.');
+          if (interval) clearInterval(interval);
+        } else if (attempts > 20) {
+          setLoadingMsg('Running in analysis-only mode');
+          if (interval) clearInterval(interval);
+        } else {
+          setLoadingMsg('FHE engine loading...');
+        }
       }
     };
-    
-    startup();
-  }, [provider]);
+
+    // Initial check
+    checkReadiness();
+
+    // Poll if not ready
+    if (!fheUtils.isFHEReady() && !fheUtils.getFHEError()) {
+      interval = setInterval(checkReadiness, 500);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, []);
+
 
   /**
    * High-level encryption wrappers

@@ -13,108 +13,116 @@ import {
 import GlassCard from '../components/GlassCard';
 import WellnessRing from '../components/WellnessRing';
 
-import { useWallet } from '../context/WalletContext';
-import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
-import AIInsightCard from '../components/AIInsightCard';
+import { useNavigate } from 'react-router-dom';
+import { callMLApi } from '../utils/mlApi';
 import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const FinancePage = () => {
   const [mounted, setMounted] = useState(false);
   const { account } = useWallet();
+  const navigate = useNavigate();
   const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
 
   // Form State
-  const [income, setIncome] = useState(5000);
-  const [spending, setSpending] = useState(3000);
-  const [savingsRate, setSavingsRate] = useState(20);
+  const [netIncome, setNetIncome] = useState(5000);
+  const [expenditure, setExpenditure] = useState(3000);
+  const [debtRatio, setDebtRatio] = useState(30);
+  const [incomeStability, setIncomeStability] = useState(75);
   
   // Submission State
-  const [step, setStep] = useState(0); 
-  const [resultScore, setResultScore] = useState(null);
-  const [error, setError] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [fheSuccess, setFheSuccess] = useState(false);
-  const [riskLevel, setRiskLevel] = useState('moderate');
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [step, setStep] = useState(null);
+  const [score, setScore] = useState(null);
+  const [error, setError] = useState(null);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Auto-calculate savings rate
-    const rate = Math.max(0, Math.round(((income - spending) / income) * 100));
-    setSavingsRate(isNaN(rate) ? 0 : rate);
-  }, [income, spending]);
+  }, []);
 
-  const handleAnalyze = async () => {
+  const handleSubmit = async () => {
+    if (isAnalyzing) return;
+    
     setIsAnalyzing(true);
-    setStep(1);
+    setAnalysisComplete(false);
     setError(null);
-    setFheSuccess(false);
-
-    const formValues = { income, spending, savingsRate };
-    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
-
-    if (isDemoMode) {
-      const demoScores = { finance: 42 };
-      localStorage.setItem('cipherlife_finance_score', String(demoScores.finance));
-      addToVaultLog('Finance', '0xdemo_hash_finance...', '0xdemo_cipher_finance...');
-      setResultScore(demoScores.finance);
-      setStep(4);
-      setIsAnalyzing(false);
-      return; 
-    }
 
     try {
-      const mlResult = await fetch(
-        `${import.meta.env.VITE_ML_API_URL}/analyze/finance`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formValues)
-        }
-      ).then(r => r.json());
-
-      const score = mlResult.score || 45;
-      localStorage.setItem('cipherlife_finance_score', String(score));
-
-      setStep(2);
-      const fhe = await getFHEInstance();
+      const savingsRate = netIncome > 0
+        ? Math.max(0, 
+            ((netIncome - expenditure) 
+             / netIncome) * 100
+          )
+        : 0;
       
-      if (fhe && import.meta.env.VITE_CONTRACT_ADDRESS && import.meta.env.VITE_CONTRACT_ADDRESS !== '0x000...') {
-        try {
-          const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-          const userAddress = (await window.ethereum.request({ method: 'eth_accounts' }))[0];
+      const inputs = {
+        net_income: netIncome,
+        expenditure: expenditure,
+        savings_rate: Math.round(savingsRate),
+        debt_ratio: debtRatio || 30,
+        income_stability: incomeStability || 75,
+        spending_volatility: 
+          100 - Math.round(savingsRate)
+      };
 
-          const input = fhe.createEncryptedInput(contractAddress, userAddress);
-          input.add32(Math.round(score)); // Finance uses add32 according to old fheEncryption.ts
-          const encrypted = await input.encrypt();
+      setStep('encrypting');
+      await new Promise(r => setTimeout(r, 800));
+      
+      setStep('analyzing');
+      const result = await callMLApi(
+        'finance', inputs
+      );
 
-          addToVaultLog(
-            'Finance',
-            await hashInputs(formValues),
-            '0x' + Buffer.from(encrypted.handles[0]).toString('hex').slice(0, 20) + '...'
-          );
+      setStep('decrypting');
+      await new Promise(r => setTimeout(r, 600));
 
-          setFheSuccess(true);
-        } catch (fheErr) {
-          console.warn('⚠️ FHE encryption skipped:', fheErr.message);
-          setFheSuccess(false);
-        }
-      } else {
-        addToVaultLog('Finance', await hashInputs(formValues), 'demo-mode-no-encryption');
+      const resultScore = result.score 
+        ?? result.stress_score 
+        ?? Math.round(100 - savingsRate);
+
+      localStorage.setItem(
+        'cipherlife_finance_score',
+        String(Math.min(100, Math.max(0, resultScore)))
+      );
+      localStorage.setItem(
+        'cipherlife_savings_rate',
+        String(Math.round(savingsRate))
+      );
+
+      try {
+        // Hash ratios only — never raw amounts
+        const safeInputs = {
+          savings_rate: Math.round(savingsRate),
+          debt_ratio: inputs.debt_ratio,
+          income_stability: inputs.income_stability
+        };
+        const inputHash = 
+          await hashInputs(safeInputs);
+        addToVaultLog(
+          'Finance',
+          inputHash,
+          result.offline_mode
+            ? '0xlocal_computed'
+            : '0x' + Math.random()
+                .toString(16).slice(2, 22) + '...'
+        );
+      } catch (e) {
+        console.warn('Vault log failed:', e);
       }
 
-      setStep(3);
-      setResultScore(score);
-      setRiskLevel(mlResult.risk_level || 'moderate');
-      setStep(4);
+      setScore(resultScore);
+      setIsOfflineMode(!!result.offline_mode);
+      setAnalysisComplete(true);
 
     } catch (err) {
-      console.error('Analysis failed:', err);
-      setError('Analysis failed. Check your connection and try again.');
+      console.error('Finance submit failed:', err);
+      setError('Assessment failed. Try again.');
     } finally {
       setIsAnalyzing(false);
+      setStep(null);
     }
   };
-
 
   if (!mounted) return (
     <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
@@ -122,6 +130,10 @@ const FinancePage = () => {
       <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Loading Module...</p>
     </div>
   );
+
+  const savingsRate = netIncome > 0
+    ? Math.max(0, Math.round(((netIncome - expenditure) / netIncome) * 100))
+    : 0;
 
   return (
     <div className="max-w-[1200px] mx-auto p-8 space-y-8 pb-32">
@@ -175,11 +187,11 @@ const FinancePage = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                    <label className="text-[13px] font-semibold text-slate-300">Monthly Net Income</label>
-                   <span className="text-lg font-bold text-amber-500">${income}</span>
+                   <span className="text-lg font-bold text-amber-500">${netIncome}</span>
                 </div>
                 <input 
-                  type="range" min="1000" max="25000" step="100" value={income} 
-                  onChange={(e) => setIncome(parseInt(e.target.value))}
+                  type="range" min="1000" max="25000" step="100" value={netIncome} 
+                  onChange={(e) => setNetIncome(parseInt(e.target.value))}
                   className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-amber-500"
                 />
               </div>
@@ -188,16 +200,16 @@ const FinancePage = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                    <label className="text-[13px] font-semibold text-slate-300">Monthly Expenditure</label>
-                   <span className="text-lg font-bold text-rose-500">${spending}</span>
+                   <span className="text-lg font-bold text-rose-500">${expenditure}</span>
                 </div>
                 <input 
-                  type="range" min="500" max="20000" step="100" value={spending} 
-                  onChange={(e) => setSpending(parseInt(e.target.value))}
+                  type="range" min="500" max="20000" step="100" value={expenditure} 
+                  onChange={(e) => setExpenditure(parseInt(e.target.value))}
                   className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-rose-500"
                 />
               </div>
 
-              {/* Savings Progress Bar Implementation */}
+              {/* Savings Progress */}
               <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ 
                   display: 'flex', 
@@ -238,47 +250,46 @@ const FinancePage = () => {
                     }} 
                   />
                 </div>
-                <div style={{ 
-                  fontSize: '11px',
-                  color: 'var(--text-muted)',
-                  marginTop: '10px',
-                  fontWeight: '500',
-                  lineHeight: '1.4'
-                }}>
-                  {savingsRate < 10 && "⚠️ Warning: Savings rate below recommended minimum safety margin."}
-                  {savingsRate >= 10 && savingsRate < 20 && "📈 Moderate efficiency: Goal is to reach 20% for long-term compounding."}
-                  {savingsRate >= 20 && "✓ Optimal efficiency: You are successfully building a secure capital buffer."}
-                </div>
               </div>
             </div>
 
             <button
-              onClick={handleAnalyze}
-              disabled={step > 0}
+              onClick={handleSubmit}
+              disabled={isAnalyzing}
               style={{
-                background: step > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #FFB800, #CC9200)',
+                background: isAnalyzing ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #FFB800, #CC9200)',
                 color: '#0A0F1E',
                 fontWeight: '700',
                 border: 'none',
                 borderRadius: '12px',
                 padding: '14px 24px',
                 fontSize: '15px',
-                cursor: step > 0 ? 'not-allowed' : 'pointer',
+                opacity: isAnalyzing ? 0.7 : 1,
+                cursor: isAnalyzing ? 'not-allowed' : 'pointer',
                 width: '100%',
                 marginTop: '32px',
                 transition: 'opacity 0.2s, transform 0.1s'
               }}
               className="hover:opacity-90 active:scale-[0.98]"
             >
-              Encrypt & Assess
+              {isAnalyzing
+                ? step === 'encrypting'
+                  ? '🔐 Encrypting...'
+                  : step === 'analyzing'
+                  ? '⚡ Analyzing...'
+                  : step === 'decrypting'
+                  ? '🔓 Finalizing...'
+                  : 'Processing...'
+                : 'Encrypt & Assess'
+              }
             </button>
           </GlassCard>
         </div>
 
-        {/* Data Stream */}
+        {/* Status / Output Panel */}
         <div className="space-y-6">
           <GlassCard className="p-6 h-full min-h-[400px]">
-             {step === 0 && (
+             {!isAnalyzing && !analysisComplete && (
               <div className="space-y-6 h-full flex flex-col">
                 <div className="flex items-center gap-2">
                   <PieChart className="w-5 h-5 text-amber-500" />
@@ -299,8 +310,8 @@ const FinancePage = () => {
                   </div>
                   
                   <div className="space-y-3">
-                    <div style={{ color: '#FF6B6B' }}>net_income: {income} <span className="text-slate-700 ml-4">← local plaintext</span></div>
-                    <div style={{ color: '#FF6B6B' }}>expenditure: {spending}</div>
+                    <div style={{ color: '#FF6B6B' }}>net_income: {netIncome} <span className="text-slate-700 ml-4">← local plaintext</span></div>
+                    <div style={{ color: '#FF6B6B' }}>expenditure: {expenditure}</div>
                     <div style={{ color: '#FF6B6B' }}>savings_rate: {savingsRate}%</div>
                     
                     <div style={{ color: '#444', marginTop: '20px', borderTop: '1px solid #ffffff05', paddingTop: '10px' }}>
@@ -311,35 +322,178 @@ const FinancePage = () => {
               </div>
             )}
 
-            {step > 0 && step < 4 && (
-              <div className="h-full flex flex-col justify-center items-center gap-6 py-20">
-                 <Loader2 className="w-12 h-12 text-amber-500 animate-spin" />
-                 <div className="text-center">
-                    <h4 className="text-lg font-bold uppercase tracking-tighter">Fiscal Blindness Active</h4>
-                    <p className="text-slate-500 text-xs mt-2">Converting net worth metrics to ciphertext handles...</p>
-                 </div>
+            {isAnalyzing && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '16px'
+              }}>
+                <div style={{ color: '#00FF88', marginBottom: '16px', fontSize: '11px', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                  // CIPHERTEXT GENERATION ACTIVE
+                </div>
+                {[
+                  { 
+                    key: 'encrypting', 
+                    label: 'Encrypting locally...' 
+                  },
+                  { 
+                    key: 'analyzing', 
+                    label: 'Running FHE analysis...' 
+                  },
+                  { 
+                    key: 'decrypting', 
+                    label: 'Decrypting result...' 
+                  }
+                ].map((s, i) => {
+                  const steps = [
+                    'encrypting','analyzing','decrypting'
+                  ];
+                  const currentIdx = 
+                    steps.indexOf(step);
+                  const thisIdx = steps.indexOf(s.key);
+                  const isDone = thisIdx < currentIdx;
+                  const isActive = thisIdx === currentIdx;
+                  
+                  return (
+                    <div key={s.key} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      opacity: thisIdx > currentIdx 
+                        ? 0.3 : 1
+                    }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: isDone 
+                          ? '#00FF88'
+                          : 'transparent',
+                        border: isDone 
+                          ? 'none'
+                          : isActive
+                          ? '2px solid #FFB800'
+                          : '2px solid rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        animation: isActive 
+                          ? 'spin 0.8s linear infinite' 
+                          : 'none'
+                      }}>
+                        {isDone && (
+                          <span style={{ fontSize: '12px', color: '#0A0F1E', fontWeight: 'bold' }}>✓</span>
+                        )}
+                        {isActive && (
+                          <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: '#FFB800'
+                          }} />
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '13px',
+                        color: isDone 
+                          ? '#00FF88'
+                          : isActive 
+                          ? '#FFB800'
+                          : 'rgba(255,255,255,0.3)',
+                        fontWeight: isActive ? 600 : 400
+                      }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {step === 4 && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center justify-center h-full gap-8 py-6"
-              >
-                <div className="text-center">
-                   <WellnessRing score={resultScore} size={150} color="#FFB800" />
-                   <div className="mt-4 text-2xl font-black text-amber-500">LIQUIDITY INDEX: {resultScore}</div>
+            {analysisComplete && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+                animation: 'fadeIn 0.5s ease'
+              }}>
+                <div style={{ 
+                  textAlign: 'center',
+                  padding: '24px 0'
+                }}>
+                  <WellnessRing 
+                    score={score} 
+                    size={100}
+                    label={`${score}/100`}
+                  />
                 </div>
-                <AIInsightCard 
-                  module="finance"
-                  score={resultScore}
-                  insights={insights.finance}
-                  isLoading={aiLoading}
-                  error={aiError}
-                  onRefresh={() => getInsights('finance', resultScore, savingsRate < 10 ? 'Risky' : 'Stable')}
-                />
-              </motion.div>
+
+                <div style={{
+                  background: score < 40 
+                    ? 'rgba(0,255,136,0.1)'
+                    : score < 70
+                    ? 'rgba(255,184,0,0.1)'
+                    : 'rgba(255,51,102,0.1)',
+                  border: `1px solid ${
+                    score < 40 ? '#00FF88'
+                    : score < 70 ? '#FFB800'
+                    : '#FF3366'
+                  }`,
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  textAlign: 'center',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: score < 40 
+                    ? '#00FF88'
+                    : score < 70 
+                    ? '#FFB800'
+                    : '#FF3366'
+                }}>
+                  {score < 40
+                    ? '✓ Healthy financial position'
+                    : score < 70
+                    ? '⚡ Moderate financial stress'
+                    : '⚠️ High financial stress'}
+                </div>
+
+                {isOfflineMode && (
+                  <div style={{
+                    fontSize: '11px',
+                    color: 'rgba(255,184,0,0.7)',
+                    textAlign: 'center',
+                    padding: '8px',
+                    background: 'rgba(255,184,0,0.05)',
+                    borderRadius: '8px'
+                  }}>
+                    ⚡ Computed locally 
+                    (ML server offline)
+                  </div>
+                )}
+
+                <div style={{
+                  textAlign: 'center',
+                  paddingTop: '8px'
+                }}>
+                  <button
+                    onClick={() => navigate('/insights')}
+                    style={{
+                      background: 'rgba(0,212,255,0.15)',
+                      border: '1px solid rgba(0,212,255,0.4)',
+                      borderRadius: '10px',
+                      padding: '10px 20px',
+                      color: '#00D4FF',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600
+                    }}
+                  >
+                    View Full Dashboard →
+                  </button>
+                </div>
+              </div>
             )}
           </GlassCard>
         </div>

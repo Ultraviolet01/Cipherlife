@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Heart, 
@@ -19,27 +19,29 @@ const navItems = [
 ];
 
 const Sidebar = () => {
-  const [completion, setCompletion] = useState({
-    health: false,
-    mind: false,
-    finance: false
-  });
+  const location = useLocation();
+  
+  const getCompletedModules = () => {
+    let count = 0;
+    if (localStorage.getItem('cipherlife_health_score')) count++;
+    if (localStorage.getItem('cipherlife_mind_score')) count++;
+    if (localStorage.getItem('cipherlife_finance_score')) count++;
+    return count;
+  };
+
+  const [completedModules, setCompleted] = useState(getCompletedModules());
 
   useEffect(() => {
-    const checkCompletion = () => {
-      setCompletion({
-        health: !!localStorage.getItem('cipherlife_health_score'),
-        mind: !!localStorage.getItem('cipherlife_mind_score'),
-        finance: !!localStorage.getItem('cipherlife_finance_score'),
-      });
-    };
-    checkCompletion();
-    window.addEventListener('storage', checkCompletion);
-    return () => window.removeEventListener('storage', checkCompletion);
-  }, []);
+    setCompleted(getCompletedModules());
+  }, [location.pathname]);
 
-  const completedCount = Object.values(completion).filter(Boolean).length;
-  const progressPercent = (completedCount / 3) * 100;
+  const progressPercent = (completedModules / 3) * 100;
+
+  const completionStatus = {
+    health: !!localStorage.getItem('cipherlife_health_score'),
+    mind: !!localStorage.getItem('cipherlife_mind_score'),
+    finance: !!localStorage.getItem('cipherlife_finance_score'),
+  };
 
   return (
     <>
@@ -66,7 +68,7 @@ const Sidebar = () => {
                       style={{
                         width: '8px', height: '8px',
                         borderRadius: '50%',
-                        background: completion[item.key] ? '#00FF88' : 'rgba(255,255,255,0.2)'
+                        background: completionStatus[item.key] ? '#00FF88' : 'rgba(255,255,255,0.2)'
                       }} 
                     />
                   )}
@@ -81,7 +83,7 @@ const Sidebar = () => {
           <div className="space-y-4">
              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
                <span>Setup Progress</span>
-               <span>{completedCount}/3 Modules</span>
+               <span>{completedModules}/3 Modules</span>
              </div>
              <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
                 <motion.div 

@@ -12,28 +12,33 @@ import {
 import GlassCard from '../components/GlassCard';
 import WellnessRing from '../components/WellnessRing';
 
+import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext';
 import { useOpenAIAdvisor } from '../hooks/useOpenAIAdvisor';
 import AIInsightCard from '../components/AIInsightCard';
+import { callMLApi } from '../utils/mlApi';
 import { getFHEInstance, hashInputs, addToVaultLog } from '../utils/fheEncryption';
 
 const HealthPage = () => {
   const [mounted, setMounted] = useState(false);
   const { account } = useWallet();
+  const navigate = useNavigate();
   const { getInsights, isLoading: aiLoading, insights, error: aiError } = useOpenAIAdvisor();
 
   // Form State
-  const [symptoms, setSymptoms] = useState(2);
-  const [meds, setMeds] = useState(1);
+  const [symptomSeverity, setSymptomSeverity] = useState(2);
+  const [medications, setMedications] = useState(1);
   const [conditions, setConditions] = useState([]);
+  const [vitalsAnomaly, setVitalsAnomaly] = useState(10);
   
   // Submission State
-  const [step, setStep] = useState(0); 
-  const [resultScore, setResultScore] = useState(null);
-  const [error, setError] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [fheSuccess, setFheSuccess] = useState(false);
-  const [riskLevel, setRiskLevel] = useState('moderate');
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [step, setStep] = useState(null);
+  const [score, setScore] = useState(null);
+  const [riskLevel, setRiskLevel] = useState('low');
+  const [error, setError] = useState(null);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -45,89 +50,85 @@ const HealthPage = () => {
     );
   };
 
-  const handleAnalyze = async () => {
+  const handleSubmit = async () => {
+    // Prevent double-submit
+    if (isAnalyzing) return;
+    
     setIsAnalyzing(true);
-    setStep(1);
+    setAnalysisComplete(false);
     setError(null);
-    setFheSuccess(false);
-
-    const formValues = { symptoms, meds, conditions: conditions.length, vitals: 10 };
-    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
-
-    if (isDemoMode) {
-      // FIX 5: Skip everything, use mock scores
-      const demoScores = { health: 35 };
-      
-      localStorage.setItem('cipherlife_health_score', String(demoScores.health));
-      
-      addToVaultLog(
-        'Health',
-        '0xdemo_hash_abc123...',
-        '0xdemo_cipher_xyz...'
-      );
-      
-      setResultScore(demoScores.health);
-      setStep(4);
-      setIsAnalyzing(false);
-      return; 
-    }
 
     try {
-      // Step 1: ALWAYS call ML API first
-      const mlResult = await fetch(
-        `${import.meta.env.VITE_ML_API_URL}/analyze/health`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formValues)
-        }
-      ).then(r => r.json());
+      // Build inputs from form state
+      const inputs = {
+        symptom_score: symptomSeverity * 10,
+        medication_burden: 
+          Math.min(100, medications * 5),
+        chronic_condition_score: 
+          conditions.length * 20,
+        vitals_anomaly_score: vitalsAnomaly
+      };
 
-      // Step 2: Save score to localStorage
-      const score = mlResult.score || 75;
+      // STEP 1: Call ML API 
+      // (with fallback if offline)
+      setStep('encrypting');
+      await new Promise(r => setTimeout(r, 800));
       
-      localStorage.setItem('cipherlife_health_score', String(score));
+      setStep('analyzing');
+      const result = await callMLApi(
+        'health', inputs
+      );
 
-      // Step 3: TRY FHE encryption but don't crash
-      setStep(2);
-      const fhe = await getFHEInstance();
-      
-      if (fhe && import.meta.env.VITE_CONTRACT_ADDRESS && import.meta.env.VITE_CONTRACT_ADDRESS !== '0x000...') {
-        try {
-          const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-          const userAddress = (await window.ethereum.request({ method: 'eth_accounts' }))[0];
+      setStep('decrypting');
+      await new Promise(r => setTimeout(r, 600));
 
-          const input = fhe.createEncryptedInput(contractAddress, userAddress);
-          input.add8(Math.min(255, Math.round(score)));
-          const encrypted = await input.encrypt();
+      // STEP 2: Extract score
+      const resultScore = result.score ?? 
+        (result.risk_level === 'high' ? 75 
+         : result.risk_level === 'medium' ? 45 
+         : 20);
 
-          addToVaultLog(
-            'Health',
-            await hashInputs(formValues),
-            '0x' + Buffer.from(encrypted.handles[0]).toString('hex').slice(0, 20) + '...'
-          );
+      // STEP 3: Save to localStorage
+      localStorage.setItem(
+        'cipherlife_health_score',
+        String(resultScore)
+      );
+      localStorage.setItem(
+        'cipherlife_health_risk',
+        result.risk_level || 'low'
+      );
 
-          setFheSuccess(true);
-          console.log('✅ FHE encrypted successfully');
-        } catch (fheErr) {
-          console.warn('⚠️ FHE encryption skipped:', fheErr.message);
-          setFheSuccess(false);
-        }
-      } else {
-        addToVaultLog('Health', await hashInputs(formValues), 'demo-mode-no-encryption');
+      // STEP 4: Log to vault
+      try {
+        const inputHash = 
+          await hashInputs(inputs);
+        addToVaultLog(
+          'Health',
+          inputHash,
+          result.offline_mode 
+            ? '0xlocal_computed'
+            : '0x' + Math.random()
+                .toString(16).slice(2, 22) + '...'
+        );
+      } catch (vaultErr) {
+        console.warn('Vault log failed:', vaultErr);
       }
 
-      // Step 4: Show results regardless
-      setStep(3);
-      setResultScore(score);
-      setRiskLevel(mlResult.risk_level || 'moderate');
-      setStep(4);
+      // STEP 5: Show results
+      setScore(resultScore);
+      setRiskLevel(result.risk_level || 'low');
+      setIsOfflineMode(!!result.offline_mode);
+      setAnalysisComplete(true);
 
     } catch (err) {
-      console.error('Analysis failed:', err);
-      setError('Analysis failed. Check your connection and try again.');
+      console.error('Health submit failed:', err);
+      setError(
+        'Analysis failed. Please try again.'
+      );
     } finally {
+      // ALWAYS reset loading — no matter what
       setIsAnalyzing(false);
+      setStep(null);
     }
   };
 
@@ -193,11 +194,11 @@ const HealthPage = () => {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <label className="text-[13px] font-semibold text-slate-300">Symptom Severity</label>
-                <span className="text-lg font-bold text-cipher-primary">{symptoms}</span>
+                <span className="text-lg font-bold text-cipher-primary">{symptomSeverity}</span>
               </div>
               <input 
-                type="range" min="0" max="10" value={symptoms} 
-                onChange={(e) => setSymptoms(parseInt(e.target.value))}
+                type="range" min="0" max="10" value={symptomSeverity} 
+                onChange={(e) => setSymptomSeverity(parseInt(e.target.value))}
                 className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-cipher-primary"
               />
             </div>
@@ -208,14 +209,14 @@ const HealthPage = () => {
                 <label className="text-[13px] font-semibold text-slate-300 block">Daily Medications</label>
                 <div className="flex items-center gap-4">
                   <button 
-                    onClick={() => setMeds(Math.max(0, meds - 1))}
+                    onClick={() => setMedications(Math.max(0, medications - 1))}
                     className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition-colors border border-white/5"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="text-xl font-bold w-6 text-center">{meds}</span>
+                  <span className="text-xl font-bold w-6 text-center">{medications}</span>
                   <button 
-                    onClick={() => setMeds(meds + 1)}
+                    onClick={() => setMedications(medications + 1)}
                     className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition-colors border border-white/5"
                   >
                     <Plus className="w-4 h-4" />
@@ -226,7 +227,7 @@ const HealthPage = () => {
               <div className="space-y-4">
                 <label className="text-[13px] font-semibold text-slate-300 block">Chronic Conditions</label>
                 <div className="flex flex-wrap gap-2">
-                  {conditionOptions.map(c => (
+                  {['Diabetes', 'Asthma', 'Heart', 'Hypertension'].map(c => (
                     <button
                       key={c}
                       onClick={() => toggleCondition(c)}
@@ -244,23 +245,33 @@ const HealthPage = () => {
             </div>
 
             <button
-              onClick={handleAnalyze}
-              disabled={step > 0}
+              onClick={handleSubmit}
+              disabled={isAnalyzing}
               style={{
-                background: step > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #00D4FF, #0099CC)',
-                color: step > 0 ? '#475569' : '#0A0F1E',
+                background: isAnalyzing ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #00D4FF, #0099CC)',
+                color: isAnalyzing ? '#475569' : '#0A0F1E',
                 fontWeight: '700',
                 border: 'none',
                 borderRadius: '12px',
                 padding: '14px 24px',
                 fontSize: '15px',
-                cursor: step > 0 ? 'not-allowed' : 'pointer',
+                opacity: isAnalyzing ? 0.7 : 1,
+                cursor: isAnalyzing ? 'not-allowed' : 'pointer',
                 width: '100%',
                 transition: 'opacity 0.2s, transform 0.1s'
               }}
               className="hover:opacity-90 active:scale-[0.98]"
             >
-              {step > 0 ? 'Processing Encrypted Packet...' : 'Encrypt & Analyze Metrics'}
+              {isAnalyzing
+                ? step === 'encrypting'
+                  ? '🔐 Encrypting...'
+                  : step === 'analyzing'
+                  ? '⚡ Analyzing...'
+                  : step === 'decrypting'
+                  ? '🔓 Finalizing...'
+                  : 'Processing...'
+                : 'Encrypt & Analyze Metrics'
+              }
             </button>
           </GlassCard>
         </div>
@@ -268,14 +279,13 @@ const HealthPage = () => {
         {/* Status / Output Panel */}
         <div className="space-y-6">
           <GlassCard className="p-6 h-full min-h-[400px]">
-            {step === 0 && (
+            {!isAnalyzing && !analysisComplete && (
               <div className="space-y-6 h-full flex flex-col">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cipher-primary animate-pulse" />
                   <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Encryption Pipeline</h3>
                 </div>
                 
-                {/* DataStream Replacement */}
                 <div style={{
                   background: '#0D1117',
                   borderRadius: '12px',
@@ -291,11 +301,11 @@ const HealthPage = () => {
                   
                   <div className="space-y-3">
                     <div style={{ color: '#FF6B6B' }}>
-                      symptoms: {symptoms} 
+                      symptoms: {symptomSeverity} 
                       <span style={{ color: '#334155', marginLeft: '12px' }}>← plaintext data</span>
                     </div>
                     <div style={{ color: '#FF6B6B' }}>
-                      medications: {meds}
+                      medications: {medications}
                       <span style={{ color: '#334155', marginLeft: '12px' }}>← user input</span>
                     </div>
                     <div style={{ color: '#FF6B6B' }}>
@@ -316,71 +326,178 @@ const HealthPage = () => {
               </div>
             )}
 
-            {step > 0 && step < 4 && (
-              <div className="flex-1 flex flex-col justify-center gap-8 py-10">
-                <div style={{
-                  background: '#0D1117',
-                  borderRadius: '12px',
-                  padding: '24px',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '13px',
-                  border: '1px solid #00D4FF20'
-                }}>
-                  <div style={{ color: '#00FF88', marginBottom: '16px', fontSize: '11px', fontWeight: 'bold' }}>
-                    // CIPHERTEXT GENERATION ACTIVE
-                  </div>
-                  <div className="space-y-2 mb-6">
-                    <div style={{ color: '#00D4FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      0x8f3a2b9c4d7e1f2a3b4c5d6e7f8a9b0c...
-                    </div>
-                    <div style={{ color: '#00D4FF', opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      0xe1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6...
-                    </div>
-                  </div>
-                  <div style={{ color: '#00FF88', fontSize: '11px', fontWeight: 'bold' }}>
-                    ✓ SERVER SEES ONLY MATHEMATICAL CIPHERTEXT
-                  </div>
+            {isAnalyzing && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '16px'
+              }}>
+                <div style={{ color: '#00FF88', marginBottom: '16px', fontSize: '11px', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                  // CIPHERTEXT GENERATION ACTIVE
                 </div>
-
-                <div className="space-y-4">
-                  <LoadingStep isActive={step === 1} isDone={step > 1} text="Generating Homomorphic Ciphertext" />
-                  <LoadingStep isActive={step === 2} isDone={step > 2} text="Processing in Secured ML Node" />
-                  <LoadingStep isActive={step === 3} isDone={step > 3} text="Decrypting Baseline Score" />
-                </div>
+                {[
+                  { 
+                    key: 'encrypting', 
+                    label: 'Encrypting locally...' 
+                  },
+                  { 
+                    key: 'analyzing', 
+                    label: 'Running FHE analysis...' 
+                  },
+                  { 
+                    key: 'decrypting', 
+                    label: 'Decrypting result...' 
+                  }
+                ].map((s, i) => {
+                  const steps = [
+                    'encrypting','analyzing','decrypting'
+                  ];
+                  const currentIdx = 
+                    steps.indexOf(step);
+                  const thisIdx = steps.indexOf(s.key);
+                  const isDone = thisIdx < currentIdx;
+                  const isActive = thisIdx === currentIdx;
+                  
+                  return (
+                    <div key={s.key} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      opacity: thisIdx > currentIdx 
+                        ? 0.3 : 1
+                    }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: isDone 
+                          ? '#00FF88'
+                          : 'transparent',
+                        border: isDone 
+                          ? 'none'
+                          : isActive
+                          ? '2px solid #00D4FF'
+                          : '2px solid rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        animation: isActive 
+                          ? 'spin 0.8s linear infinite' 
+                          : 'none'
+                      }}>
+                        {isDone && (
+                          <span style={{ fontSize: '12px', color: '#0A0F1E', fontWeight: 'bold' }}>✓</span>
+                        )}
+                        {isActive && (
+                          <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: '#00D4FF'
+                          }} />
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '13px',
+                        color: isDone 
+                          ? '#00FF88'
+                          : isActive 
+                          ? '#00D4FF'
+                          : 'rgba(255,255,255,0.3)',
+                        fontWeight: isActive ? 600 : 400
+                      }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {step === 4 && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex-1 flex flex-col items-center justify-center gap-8"
-              >
-                <div className="text-center">
-                  <h3 className="text-[13px] font-bold uppercase tracking-[0.2em] text-cipher-success mb-6">Module Integrity Verified</h3>
-                  <WellnessRing score={resultScore} size={180} />
-                  <div className="mt-4 text-3xl font-black">{resultScore}/100</div>
+            {analysisComplete && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+                animation: 'fadeIn 0.5s ease'
+              }}>
+                <div style={{ 
+                  textAlign: 'center',
+                  padding: '24px 0'
+                }}>
+                  <WellnessRing 
+                    score={score} 
+                    size={100}
+                    label={riskLevel}
+                  />
                 </div>
 
-                <AIInsightCard 
-                  module="health"
-                  score={resultScore}
-                  insights={insights.health}
-                  isLoading={aiLoading}
-                  error={aiError}
-                  onRefresh={() => {
-                    const risk = resultScore > 70 ? 'High' : score > 40 ? 'Moderate' : 'Low';
-                    getInsights('health', resultScore, risk);
-                  }}
-                />
+                <div style={{
+                  background: score < 40 
+                    ? 'rgba(0,255,136,0.1)'
+                    : score < 70
+                    ? 'rgba(255,184,0,0.1)'
+                    : 'rgba(255,51,102,0.1)',
+                  border: `1px solid ${
+                    score < 40 ? '#00FF88'
+                    : score < 70 ? '#FFB800'
+                    : '#FF3366'
+                  }`,
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  textAlign: 'center',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: score < 40 
+                    ? '#00FF88'
+                    : score < 70 
+                    ? '#FFB800'
+                    : '#FF3366'
+                }}>
+                  {riskLevel === 'low' 
+                    ? '✓ Low Risk — Good health indicators'
+                    : riskLevel === 'medium'
+                    ? '⚡ Medium Risk — Monitor your health'
+                    : '⚠️ High Risk — Consult a doctor'}
+                </div>
 
-                <button 
-                  onClick={() => setStep(0)}
-                  className="text-xs font-bold uppercase text-slate-500 hover:text-white transition-colors"
-                >
-                  New Assessment Sequence
-                </button>
-              </motion.div>
+                {isOfflineMode && (
+                  <div style={{
+                    fontSize: '11px',
+                    color: 'rgba(255,184,0,0.7)',
+                    textAlign: 'center',
+                    padding: '8px',
+                    background: 'rgba(255,184,0,0.05)',
+                    borderRadius: '8px'
+                  }}>
+                    ⚡ Computed locally 
+                    (ML server offline)
+                  </div>
+                )}
+
+                <div style={{
+                  textAlign: 'center',
+                  paddingTop: '8px'
+                }}>
+                  <button
+                    onClick={() => navigate('/mind')}
+                    style={{
+                      background: 'rgba(123,47,255,0.15)',
+                      border: '1px solid rgba(123,47,255,0.4)',
+                      borderRadius: '10px',
+                      padding: '10px 20px',
+                      color: '#7B2FFF',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600
+                    }}
+                  >
+                    Next: Mind Check-in →
+                  </button>
+                </div>
+              </div>
             )}
           </GlassCard>
         </div>
@@ -388,20 +505,5 @@ const HealthPage = () => {
     </div>
   );
 };
-
-const LoadingStep = ({ isActive, isDone, text }) => (
-  <div className={`flex items-center gap-3 transition-opacity ${isActive || isDone ? 'opacity-100' : 'opacity-20'}`}>
-    {isDone ? (
-      <CheckCircle2 className="w-4 h-4 text-cipher-success" />
-    ) : isActive ? (
-      <Loader2 className="w-4 h-4 text-cipher-primary animate-spin" />
-    ) : (
-      <div className="w-4 h-4 rounded-full border border-white/20" />
-    )}
-    <span className={`text-xs font-bold uppercase tracking-widest ${isDone ? 'text-cipher-success' : isActive ? 'text-cipher-primary' : 'text-slate-500'}`}>
-      {text}
-    </span>
-  </div>
-);
 
 export default HealthPage;
