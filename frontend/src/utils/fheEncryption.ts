@@ -18,7 +18,7 @@ async function startFHEInit() {
       return null;
     }
 
-    const { createInstance } = await import('@zama-fhe/relayer-sdk');
+    const { createInstance } = await import('@zama-fhe/relayer-sdk/web');
 
     fheInstance = await createInstance({
       chainId: 11155111,
