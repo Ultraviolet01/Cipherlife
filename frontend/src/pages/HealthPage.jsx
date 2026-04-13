@@ -61,12 +61,14 @@ const HealthPage = () => {
     try {
       // Build inputs from form state
       const inputs = {
-        symptom_score: symptomSeverity * 10,
-        medication_burden: 
-          Math.min(100, medications * 5),
-        chronic_condition_score: 
-          conditions.length * 20,
-        vitals_anomaly_score: vitalsAnomaly
+        symptom_score: Math.min(100, 
+          (symptomSeverity || 0) * 10),
+        medication_burden: Math.min(100, 
+          (medications || 0) * 5),
+        chronic_condition_score: Math.min(100,
+          (conditions?.length || 0) * 25),
+        vitals_anomaly_score: Math.min(100, 
+          vitalsAnomaly || 0)
       };
 
       // STEP 1: Lazy Init FHE (Triggered by user click)
@@ -84,9 +86,9 @@ const HealthPage = () => {
 
       // STEP 2: Extract score
       const resultScore = result.score ?? 
-        (result.risk_level === 'high' ? 75 
-         : result.risk_level === 'medium' ? 45 
-         : 20);
+        (result.risk_level === 'high' ? 78 
+         : result.risk_level === 'medium' ? 42 
+         : 15);
 
       // STEP 3: Save to localStorage
       localStorage.setItem(
@@ -434,34 +436,57 @@ const HealthPage = () => {
                   />
                 </div>
 
-                <div style={{
-                  background: score < 40 
-                    ? 'rgba(0,255,136,0.1)'
-                    : score < 70
-                    ? 'rgba(255,184,0,0.1)'
-                    : 'rgba(255,51,102,0.1)',
-                  border: `1px solid ${
-                    score < 40 ? '#00FF88'
-                    : score < 70 ? '#FFB800'
-                    : '#FF3366'
-                  }`,
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  textAlign: 'center',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: score < 40 
-                    ? '#00FF88'
-                    : score < 70 
-                    ? '#FFB800'
-                    : '#FF3366'
-                }}>
-                  {riskLevel === 'low' 
-                    ? '✓ Low Risk — Good health indicators'
-                    : riskLevel === 'medium'
-                    ? '⚡ Medium Risk — Monitor your health'
-                    : '⚠️ High Risk — Consult a doctor'}
-                </div>
+                  {riskLevel === 'low' && (
+                    <div style={{
+                      background: 'rgba(0,255,136,0.1)',
+                      border: '1px solid rgba(0,255,136,0.3)',
+                      color: '#00FF88',
+                      borderRadius: '10px',
+                      padding: '12px 16px',
+                      fontWeight: 600,
+                      fontSize: '14px'
+                    }}>
+                      ✓ Low Risk — Good health indicators
+                    </div>
+                  )}
+
+                  {riskLevel === 'medium' && (
+                    <div style={{
+                      background: 'rgba(255,184,0,0.1)',
+                      border: '1px solid rgba(255,184,0,0.3)',
+                      color: '#FFB800',
+                      borderRadius: '10px',
+                      padding: '12px 16px',
+                      fontWeight: 600,
+                      fontSize: '14px'
+                    }}>
+                      ⚡ Medium Risk — Monitor your health
+                    </div>
+                  )}
+
+                  {riskLevel === 'high' && (
+                    <div style={{
+                      background: 'rgba(255,51,102,0.1)',
+                      border: '1px solid rgba(255,51,102,0.4)',
+                      color: '#FF3366',
+                      borderRadius: '10px',
+                      padding: '12px 16px',
+                      fontWeight: 600,
+                      fontSize: '14px'
+                    }}>
+                      ⚠️ High Risk — Please consult a doctor
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: 400,
+                        marginTop: '4px',
+                        color: 'rgba(255,51,102,0.8)'
+                      }}>
+                        This is AI-generated guidance only. 
+                        Always consult a qualified medical 
+                        professional.
+                      </div>
+                    </div>
+                  )}
 
                 {isOfflineMode && (
                   <div style={{

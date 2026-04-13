@@ -16,17 +16,50 @@ function fetchWithTimeout(url, options, ms = 8000) {
 // Fallback scores when API is offline
 function getFallbackScore(module, inputs) {
   if (module === 'health') {
+    const symptom = inputs.symptom_score || 0;
+    const medication = 
+      inputs.medication_burden || 0;
+    const chronic = 
+      inputs.chronic_condition_score || 0;
+    const vitals = 
+      inputs.vitals_anomaly_score || 0;
+
+    // Weighted score — symptoms carry 
+    // the most weight (60%)
     const raw = (
-      (inputs.symptom_score || 0) * 0.4 +
-      (inputs.medication_burden || 0) * 0.2 +
-      (inputs.chronic_condition_score || 0) * 0.3 +
-      (inputs.vitals_anomaly_score || 0) * 0.1
+      symptom    * 0.60 +
+      medication * 0.15 +
+      chronic    * 0.15 +
+      vitals     * 0.10
     );
-    const score = Math.min(100, Math.round(raw));
+
+    const score = Math.min(
+      100, Math.round(raw)
+    );
+
+    // Corrected thresholds:
+    // High   = score > 50 
+    //   (max symptoms alone = 60 → high)
+    // Medium = score > 25
+    // Low    = score <= 25
+    const risk_level = 
+      score > 50 ? 'high'
+      : score > 25 ? 'medium' 
+      : 'low';
+
+    // Hard override: any chronic condition 
+    // + high symptoms = always high risk
+    const hasChronicCondition = chronic > 0;
+    const hasHighSymptoms = symptom >= 60;
+    
+    const finalRisk = 
+      (hasChronicCondition && hasHighSymptoms)
+        ? 'high'
+        : risk_level;
+
     return {
       score,
-      risk_level: score > 66 ? 'high' 
-        : score > 33 ? 'medium' : 'low',
+      risk_level: finalRisk,
       fhe_protected: true,
       offline_mode: true
     };
