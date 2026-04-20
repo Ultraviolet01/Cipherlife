@@ -22,8 +22,8 @@ const FinancePage = () => {
   const navigate = useNavigate();
 
   // Form State
-  const [netIncome, setNetIncome] = useState(5000);
-  const [expenditure, setExpenditure] = useState(3000);
+  const [netIncome, setNetIncome] = useState(100);
+  const [expenditure, setExpenditure] = useState(50);
   const [debtRatio, setDebtRatio] = useState(30);
   const [incomeStability, setIncomeStability] = useState(75);
   
@@ -189,7 +189,7 @@ const FinancePage = () => {
                    <span className="text-lg font-bold text-amber-500">${netIncome}</span>
                 </div>
                 <input 
-                  type="range" min="1000" max="25000" step="100" value={netIncome} 
+                  type="range" min="100" max="25000" step="50" value={netIncome} 
                   onChange={(e) => setNetIncome(parseInt(e.target.value))}
                   className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-amber-500"
                 />
@@ -202,7 +202,7 @@ const FinancePage = () => {
                    <span className="text-lg font-bold text-rose-500">${expenditure}</span>
                 </div>
                 <input 
-                  type="range" min="500" max="20000" step="100" value={expenditure} 
+                  type="range" min="50" max="20000" step="10" value={expenditure} 
                   onChange={(e) => setExpenditure(parseInt(e.target.value))}
                   className="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-rose-500"
                 />
