@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import "@fhevm/solidity/lib/FHE.sol";
-import "@fhevm/solidity/config/ZamaConfig.sol";
+import {FHE, ebool, euint32, externalEuint32} from "@fhevm/solidity/lib/FHE.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 contract CipherLifeAccount is ZamaEthereumConfig {
     ebool private _isLocked;
@@ -18,12 +18,12 @@ contract CipherLifeAccount is ZamaEthereumConfig {
     function deposit(externalEuint32 encryptedValue, bytes calldata inputProof) public {
         euint32 value = FHE.fromExternal(encryptedValue, inputProof);
         _secureBalance = FHE.add(_secureBalance, value);
+        FHE.allowThis(_secureBalance);
+        FHE.allow(_secureBalance, msg.sender);
         emit BalanceUpdated();
     }
 
     function getLockedState() public view returns (ebool) {
         return _isLocked;
     }
-
-    // Example of a gateway call for decryption would go here
 }

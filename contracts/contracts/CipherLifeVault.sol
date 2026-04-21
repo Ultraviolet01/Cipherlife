@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "@fhevm/solidity/lib/FHE.sol";
-import "@fhevm/solidity/config/ZamaConfig.sol";
+import {FHE, euint8, euint32, externalEuint8, externalEuint32} from "@fhevm/solidity/lib/FHE.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /**
  * @title CipherLifeVault
@@ -27,7 +27,7 @@ contract CipherLifeVault is ZamaEthereumConfig {
     bytes calldata inputProof
   ) external {
     healthScore[msg.sender] = FHE.fromExternal(encryptedScore, inputProof);
-    FHE.allowTransient(healthScore[msg.sender], msg.sender);
+    FHE.allowThis(healthScore[msg.sender]);
     FHE.allow(healthScore[msg.sender], msg.sender);
     emit HealthDataSubmitted(msg.sender);
   }
@@ -38,7 +38,7 @@ contract CipherLifeVault is ZamaEthereumConfig {
     bytes calldata inputProof
   ) external {
     mindScore[msg.sender] = FHE.fromExternal(encryptedScore, inputProof);
-    FHE.allowTransient(mindScore[msg.sender], msg.sender);
+    FHE.allowThis(mindScore[msg.sender]);
     FHE.allow(mindScore[msg.sender], msg.sender);
     emit MindDataSubmitted(msg.sender);
   }
@@ -49,7 +49,7 @@ contract CipherLifeVault is ZamaEthereumConfig {
     bytes calldata inputProof
   ) external {
     financeScore[msg.sender] = FHE.fromExternal(encryptedScore, inputProof);
-    FHE.allowTransient(financeScore[msg.sender], msg.sender);
+    FHE.allowThis(financeScore[msg.sender]);
     FHE.allow(financeScore[msg.sender], msg.sender);
     emit FinanceDataSubmitted(msg.sender);
   }

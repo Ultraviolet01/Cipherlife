@@ -1,11 +1,19 @@
 // @ts-nocheck
 const CipherLifeVault = {
-  "contractAddress": "0x299C326476acd449D47Bef7a5Fbe542cF09F1DBb",
+  "contractAddress": "0x26413e667a0a291EAb17C8364C88ECc50A93C9B0",
   "abi": [
     {
       "inputs": [
-        { "internalType": "bytes32", "name": "handle", "type": "bytes32" },
-        { "internalType": "address", "name": "sender", "type": "address" }
+        {
+          "internalType": "bytes32",
+          "name": "handle",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
       ],
       "name": "SenderNotAllowedToUseHandle",
       "type": "error"
@@ -18,7 +26,12 @@ const CipherLifeVault = {
     {
       "anonymous": false,
       "inputs": [
-        { "indexed": true, "internalType": "address", "name": "user", "type": "address" }
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
       ],
       "name": "FinanceDataSubmitted",
       "type": "event"
@@ -26,7 +39,12 @@ const CipherLifeVault = {
     {
       "anonymous": false,
       "inputs": [
-        { "indexed": true, "internalType": "address", "name": "user", "type": "address" }
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
       ],
       "name": "HealthDataSubmitted",
       "type": "event"
@@ -34,7 +52,12 @@ const CipherLifeVault = {
     {
       "anonymous": false,
       "inputs": [
-        { "indexed": true, "internalType": "address", "name": "user", "type": "address" }
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
       ],
       "name": "MindDataSubmitted",
       "type": "event"
@@ -42,9 +65,24 @@ const CipherLifeVault = {
     {
       "anonymous": false,
       "inputs": [
-        { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
-        { "indexed": false, "internalType": "uint8", "name": "health", "type": "uint8" },
-        { "indexed": false, "internalType": "uint8", "name": "mind", "type": "uint8" }
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "health",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "mind",
+          "type": "uint8"
+        }
       ],
       "name": "ScoresDecrypted",
       "type": "event"
@@ -53,20 +91,40 @@ const CipherLifeVault = {
       "inputs": [],
       "name": "confidentialProtocolId",
       "outputs": [
-        { "internalType": "uint256", "name": "", "type": "uint256" }
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
       ],
       "stateMutability": "view",
       "type": "function"
     },
     {
       "inputs": [
-        { "internalType": "uint256", "name": "requestId", "type": "uint256" },
-        { "internalType": "uint8", "name": "decryptedHealth", "type": "uint8" },
-        { "internalType": "uint8", "name": "decryptedMind", "type": "uint8" }
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8",
+          "name": "decryptedHealth",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "decryptedMind",
+          "type": "uint8"
+        }
       ],
       "name": "decryptionCallback",
       "outputs": [
-        { "internalType": "bool", "name": "", "type": "bool" }
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
       ],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -75,7 +133,11 @@ const CipherLifeVault = {
       "inputs": [],
       "name": "getInsightScore",
       "outputs": [
-        { "internalType": "uint256", "name": "", "type": "uint256" }
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
       ],
       "stateMutability": "view",
       "type": "function"
@@ -89,8 +151,16 @@ const CipherLifeVault = {
     },
     {
       "inputs": [
-        { "internalType": "externalEuint32", "name": "encryptedScore", "type": "bytes32" },
-        { "internalType": "bytes", "name": "inputProof", "type": "bytes" }
+        {
+          "internalType": "externalEuint32",
+          "name": "encryptedScore",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes",
+          "name": "inputProof",
+          "type": "bytes"
+        }
       ],
       "name": "submitFinanceData",
       "outputs": [],
@@ -99,8 +169,16 @@ const CipherLifeVault = {
     },
     {
       "inputs": [
-        { "internalType": "externalEuint8", "name": "encryptedScore", "type": "bytes32" },
-        { "internalType": "bytes", "name": "inputProof", "type": "bytes" }
+        {
+          "internalType": "externalEuint8",
+          "name": "encryptedScore",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes",
+          "name": "inputProof",
+          "type": "bytes"
+        }
       ],
       "name": "submitHealthData",
       "outputs": [],
@@ -109,8 +187,16 @@ const CipherLifeVault = {
     },
     {
       "inputs": [
-        { "internalType": "externalEuint8", "name": "encryptedScore", "type": "bytes32" },
-        { "internalType": "bytes", "name": "inputProof", "type": "bytes" }
+        {
+          "internalType": "externalEuint8",
+          "name": "encryptedScore",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes",
+          "name": "inputProof",
+          "type": "bytes"
+        }
       ],
       "name": "submitMindData",
       "outputs": [],
