@@ -28,7 +28,7 @@ const VaultPage = () => {
   );
 
   return (
-    <div className="max-w-[1200px] mx-auto p-8 space-y-12 pb-32">
+    <div className="max-w-[1200px] mx-auto p-4 md:p-8 space-y-8 md:space-y-12 pb-24 md:pb-32">
       {/* Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{
@@ -113,16 +113,17 @@ const VaultPage = () => {
             <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Cryptographic Flow</h3>
          </div>
          
-         <div className="flex flex-wrap items-center justify-between gap-4 py-8 px-4 bg-white/5 rounded-3xl border border-white/5">
+         <div className="flex flex-col lg:flex-row flex-wrap items-center justify-between gap-4 py-8 px-4 bg-white/5 rounded-3xl border border-white/5">
             {['Your Device', 'FHE Encrypt', 'Sepolia Node', 'ML Coprocessor', 'Back to You'].map((step, i) => (
               <React.Fragment key={i}>
-                <div style={{
+                <div 
+                  className="w-full lg:w-auto lg:min-w-[140px]"
+                  style={{
                   background: 'rgba(0,212,255,0.06)',
                   border: '1px solid rgba(0,212,255,0.2)',
                   borderRadius: '16px',
                   padding: '24px',
                   textAlign: 'center',
-                  minWidth: '140px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -144,7 +145,7 @@ const VaultPage = () => {
                   </div>
                 </div>
                 {i < 4 && (
-                  <div className="flex-1 min-w-[30px] flex justify-center">
+                  <div className="flex-1 min-w-[30px] flex justify-center rotate-90 lg:rotate-0 my-2 lg:my-0">
                     <ArrowRight className="text-cipher-primary opacity-30" />
                   </div>
                 )}

@@ -84,17 +84,16 @@ const InsightsPage = () => {
       variants={container}
       initial="hidden"
       animate="show"
-      className="max-w-[1200px] mx-auto p-8 space-y-8"
+      className="max-w-[1200px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8"
     >
       {/* Hero Section */}
-      <section style={{
+      <section 
+        className="flex flex-col md:flex-row items-center justify-between text-center md:text-left gap-6 md:gap-0"
+        style={{
         background: 'linear-gradient(135deg, rgba(0,212,255,0.06), rgba(123,47,255,0.06))',
         border: '1px solid rgba(0,212,255,0.15)',
         borderRadius: '20px',
         padding: '32px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         marginBottom: '24px'
       }}>
         <div>

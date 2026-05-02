@@ -135,9 +135,9 @@ const FinancePage = () => {
     : 0;
 
   return (
-    <div className="max-w-[1200px] mx-auto p-8 space-y-8 pb-32">
+    <div className="max-w-[1200px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-24 md:pb-32">
        {/* Step Header */}
-       <div className="flex items-center gap-4 text-[11px] font-black uppercase tracking-widest mb-2">
+       <div className="flex flex-wrap items-center gap-2 md:gap-4 text-[11px] font-black uppercase tracking-widest mb-2">
          <span className="text-slate-700">Step 2</span>
          <span className="text-slate-700">→</span>
          <span className="text-amber-500">Step 3 of 3</span>
